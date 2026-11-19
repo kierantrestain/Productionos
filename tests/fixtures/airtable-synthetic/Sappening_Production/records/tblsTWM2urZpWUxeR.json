@@ -1,0 +1,30 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tblsTWM2urZpWUxeR",
+  "table_name": "Shoot Days",
+  "records": [
+    {
+      "id": "recSynDa1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldDa1": "2026-10-21",
+        "fldDa2": "07:30",
+        "fldDa3": [
+          "recSynSc1",
+          "recSynSc2"
+        ]
+      }
+    },
+    {
+      "id": "recSynDa2",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldDa1": "2026-10-21",
+        "fldDa2": "14:00",
+        "fldDa3": [
+          "recSynSc3"
+        ]
+      }
+    }
+  ]
+}

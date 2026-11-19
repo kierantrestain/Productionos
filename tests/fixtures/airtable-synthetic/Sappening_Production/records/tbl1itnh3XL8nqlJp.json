@@ -1,0 +1,23 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tbl1itnh3XL8nqlJp",
+  "table_name": "Props",
+  "records": [
+    {
+      "id": "recSynPr1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldPr1": "Synthetic Prop 1",
+        "fldPr2": 2
+      }
+    },
+    {
+      "id": "recSynPr2",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldPr1": "Synthetic Prop 2",
+        "fldPr2": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "base_id": "appGbXugVx1UAfw6B",
+  "table_id": "tblkBhusxIPPTufev",
+  "table_name": "Automation Control Centre",
+  "records": [
+    {
+      "id": "recSynAc1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldAc1": "AUTO-901",
+        "fldAc2": "Synthetic spec",
+        "fldAc3": "record.created",
+        "fldAc4": "Tasks",
+        "fldAc5": "3 attempts"
+      }
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "tables": [
+    {
+      "id": "tblkjPy09A3Y5yjqG",
+      "name": "Slate & IP",
+      "fields": [
+        {
+          "id": "fldSl1",
+          "name": "Title",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldSl2",
+          "name": "Stage",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldSl3",
+          "name": "Format",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldSl4",
+          "name": "Logline",
+          "type": "multilineText"
+        }
+      ]
+    },
+    {
+      "id": "tblkBhusxIPPTufev",
+      "name": "Automation Control Centre",
+      "fields": [
+        {
+          "id": "fldAc1",
+          "name": "Key",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldAc2",
+          "name": "Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldAc3",
+          "name": "Trigger",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldAc4",
+          "name": "Target Table",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldAc5",
+          "name": "Retry Policy",
+          "type": "singleLineText"
+        }
+      ]
+    },
+    {
+      "id": "tblMYEFhQ3PT99zMI",
+      "name": "Governance & Approvals",
+      "fields": [
+        {
+          "id": "fldGo1",
+          "name": "Title",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldGo2",
+          "name": "Status",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldGo3",
+          "name": "Approver",
+          "type": "singleLineText"
+        }
+      ]
+    },
+    {
+      "id": "tblsGAc1AqnPdEhR9",
+      "name": "Automation Run Log",
+      "fields": [
+        {
+          "id": "fldRl1",
+          "name": "Run",
+          "type": "singleLineText"
+        }
+      ]
+    }
+  ]
+}

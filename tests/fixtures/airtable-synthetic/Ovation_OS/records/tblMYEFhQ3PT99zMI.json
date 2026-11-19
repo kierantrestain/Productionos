@@ -1,0 +1,16 @@
+{
+  "base_id": "appGbXugVx1UAfw6B",
+  "table_id": "tblMYEFhQ3PT99zMI",
+  "table_name": "Governance & Approvals",
+  "records": [
+    {
+      "id": "recSynGo1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldGo1": "Synthetic historical approval",
+        "fldGo2": "Approved",
+        "fldGo3": "Synthetic Approver"
+      }
+    }
+  ]
+}

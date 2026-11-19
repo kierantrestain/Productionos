@@ -1,0 +1,14 @@
+{
+  "base_id": "appGbXugVx1UAfw6B",
+  "table_id": "tblsGAc1AqnPdEhR9",
+  "table_name": "Automation Run Log",
+  "records": [
+    {
+      "id": "recSynRl1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldRl1": "synthetic run"
+      }
+    }
+  ]
+}

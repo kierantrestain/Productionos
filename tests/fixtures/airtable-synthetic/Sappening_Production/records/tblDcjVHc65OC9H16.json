@@ -1,0 +1,41 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tblDcjVHc65OC9H16",
+  "table_name": "Cast",
+  "records": [
+    {
+      "id": "recSynCa1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldCa1": "Synthetic Cast 1",
+        "fldCa2": "Synthetic Character A",
+        "fldCa3": "cast1@example.test",
+        "fldCa4": "Create Contract",
+        "fldCa5": [
+          {
+            "id": "attSynGood",
+            "filename": "synthetic-headshot.txt",
+            "url": "https://example.invalid/expired"
+          }
+        ],
+        "fldCa6": "9"
+      }
+    },
+    {
+      "id": "recSynCa2",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldCa1": "Synthetic Cast 2",
+        "fldCa2": "Synthetic Character B",
+        "fldCa4": "Signed",
+        "fldCa5": [
+          {
+            "id": "attSynBad",
+            "filename": "synthetic-tampered.txt",
+            "url": "https://example.invalid/expired"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tblW1sDnBQzmdFpBP",
+  "table_name": "Scenes",
+  "records": [
+    {
+      "id": "recSynSc1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSc1": "1",
+        "fldSc2": "Synthetic Scene One",
+        "fldSc3": "Synthetic Director",
+        "fldSc4": [
+          "recSynEp1"
+        ],
+        "fldSc5": [
+          "recSynCa1",
+          "recSynCa2"
+        ],
+        "fldSc6": [
+          "recSynPr1"
+        ],
+        "fldSc7": [
+          "recSynLo1"
+        ],
+        "fldSc8": "INT",
+        "fldSc9": [
+          {
+            "id": "attSynMissing",
+            "filename": "never-downloaded.png",
+            "url": "https://example.invalid/expired"
+          }
+        ]
+      }
+    },
+    {
+      "id": "recSynSc2",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSc1": "2",
+        "fldSc2": "Synthetic Scene Two",
+        "fldSc3": "Synthetic Director",
+        "fldSc4": [
+          "recSynEp1"
+        ],
+        "fldSc5": [
+          "recSynCa1"
+        ],
+        "fldSc6": [
+          "recSynPr2",
+          "recSynGhost"
+        ],
+        "fldSc8": "EXT"
+      }
+    },
+    {
+      "id": "recSynSc3",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSc1": "3",
+        "fldSc2": "Synthetic Scene Three",
+        "fldSc4": [
+          "recSynEp1"
+        ]
+      }
+    }
+  ]
+}

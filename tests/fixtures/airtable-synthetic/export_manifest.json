@@ -1,0 +1,26 @@
+{
+  "base_details": {},
+  "tables": {},
+  "attachment_manifest": [
+    {
+      "base_id": "appkx0tyAT1SDGSz5",
+      "table_id": "tblDcjVHc65OC9H16",
+      "record_id": "recSynCa1",
+      "attachment_id": "attSynGood",
+      "filename": "synthetic-headshot.txt",
+      "path": "attachments/synthetic-headshot.txt",
+      "bytes": 38,
+      "sha256": "de86e62a9bfb0e62ec5e3617e0e621b9e35077fde30de83819422e7c91e92017"
+    },
+    {
+      "base_id": "appkx0tyAT1SDGSz5",
+      "table_id": "tblDcjVHc65OC9H16",
+      "record_id": "recSynCa2",
+      "attachment_id": "attSynBad",
+      "filename": "synthetic-tampered.txt",
+      "path": "attachments/synthetic-tampered.txt",
+      "bytes": 24,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

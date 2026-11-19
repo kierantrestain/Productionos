@@ -1,0 +1,268 @@
+{
+  "tables": [
+    {
+      "id": "tblrKqCF9PnjQ4bdt",
+      "name": "Episodes",
+      "fields": [
+        {
+          "id": "fldEp1",
+          "name": "Episode Number",
+          "type": "number"
+        },
+        {
+          "id": "fldEp2",
+          "name": "Episode Title",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldEp3",
+          "name": "Synopsis",
+          "type": "multilineText"
+        },
+        {
+          "id": "fldEp4",
+          "name": "Scenes",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldEp5",
+          "name": "Scene Count",
+          "type": "count"
+        }
+      ]
+    },
+    {
+      "id": "tblDcjVHc65OC9H16",
+      "name": "Cast",
+      "fields": [
+        {
+          "id": "fldCa1",
+          "name": "Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldCa2",
+          "name": "Character",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldCa3",
+          "name": "Email",
+          "type": "email"
+        },
+        {
+          "id": "fldCa4",
+          "name": "Cast Contract Status",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldCa5",
+          "name": "Headshot",
+          "type": "multipleAttachments"
+        },
+        {
+          "id": "fldCa6",
+          "name": "Shoe Size",
+          "type": "singleLineText"
+        }
+      ]
+    },
+    {
+      "id": "tblloD53Mvy1pUEzK",
+      "name": "Locations",
+      "fields": [
+        {
+          "id": "fldLo1",
+          "name": "Location Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldLo2",
+          "name": "Address",
+          "type": "multilineText"
+        },
+        {
+          "id": "fldLo3",
+          "name": "Status",
+          "type": "singleSelect"
+        }
+      ]
+    },
+    {
+      "id": "tbl1itnh3XL8nqlJp",
+      "name": "Props",
+      "fields": [
+        {
+          "id": "fldPr1",
+          "name": "Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldPr2",
+          "name": "Quantity",
+          "type": "number"
+        }
+      ]
+    },
+    {
+      "id": "tblW1sDnBQzmdFpBP",
+      "name": "Scenes",
+      "fields": [
+        {
+          "id": "fldSc1",
+          "name": "Scene Number",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldSc2",
+          "name": "Scene Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldSc3",
+          "name": "Director",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldSc4",
+          "name": "Episode",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldSc5",
+          "name": "Cast",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldSc6",
+          "name": "Props",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldSc7",
+          "name": "Location",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldSc8",
+          "name": "INT/EXT",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldSc9",
+          "name": "Storyboard",
+          "type": "multipleAttachments"
+        }
+      ]
+    },
+    {
+      "id": "tbldAycWzelaDgau1",
+      "name": "Shot List",
+      "fields": [
+        {
+          "id": "fldSh1",
+          "name": "Shot Number",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldSh2",
+          "name": "Scene",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldSh3",
+          "name": "Shot Type",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldSh4",
+          "name": "Description",
+          "type": "multilineText"
+        }
+      ]
+    },
+    {
+      "id": "tblsTWM2urZpWUxeR",
+      "name": "Shoot Days",
+      "fields": [
+        {
+          "id": "fldDa1",
+          "name": "Date",
+          "type": "date"
+        },
+        {
+          "id": "fldDa2",
+          "name": "Call Time",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldDa3",
+          "name": "Scenes",
+          "type": "multipleRecordLinks"
+        }
+      ]
+    },
+    {
+      "id": "tblGb5n08jJfvEXeA",
+      "name": "Release Forms",
+      "fields": [
+        {
+          "id": "fldRe1",
+          "name": "Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldRe2",
+          "name": "Cast",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldRe3",
+          "name": "Status",
+          "type": "singleSelect"
+        }
+      ]
+    },
+    {
+      "id": "tblHlxKEuO31ovAyL",
+      "name": "Editing",
+      "fields": [
+        {
+          "id": "fldEd1",
+          "name": "Scene Number",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldEd2",
+          "name": "Scene Name",
+          "type": "singleLineText"
+        },
+        {
+          "id": "fldEd3",
+          "name": "Episode",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldEd4",
+          "name": "Scene",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldEd5",
+          "name": "Edit Status",
+          "type": "singleSelect"
+        },
+        {
+          "id": "fldEd6",
+          "name": "Cast",
+          "type": "multipleRecordLinks"
+        },
+        {
+          "id": "fldEd7",
+          "name": "Director",
+          "type": "singleLineText"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tblloD53Mvy1pUEzK",
+  "table_name": "Locations",
+  "records": [
+    {
+      "id": "recSynLo1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldLo1": "Synthetic Location 1",
+        "fldLo2": "1 Synthetic Street, Nowhere",
+        "fldLo3": "Confirmed"
+      }
+    }
+  ]
+}

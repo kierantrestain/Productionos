@@ -94,6 +94,7 @@ export async function decideApproval(ctx: Ctx, approvalId: string, decision: "ap
   return db.transaction(async (tx) => {
     const [req] = await tx.select().from(approvalRequests).where(and(eq(approvalRequests.id, approvalId), eq(approvalRequests.orgId, ctx.orgId))).for("update").limit(1);
     if (!req || (req.productionId && !productionAllowed(ctx, req.productionId))) throw notFound();
+    if (req.historical) throw invalid("Historical imported approvals are read-only records and cannot be decided.");
     if (req.status !== "pending") throw invalid(`This request is already ${req.status}.`);
     if (!canDecide(ctx.role, req.requiredRole)) throw forbidden(`This approval requires ${req.requiredRole.replace("_", " ")} authority.`);
     if (req.requestedBy === ctx.userId) throw forbidden("You cannot approve your own request.");
@@ -139,9 +140,9 @@ export async function withdrawApproval(ctx: Ctx, approvalId: string) {
 export async function listApprovals(ctx: Ctx, status: "pending" | "all" = "pending") {
   requireRead(ctx, "approvals");
   const rows = await db.select().from(approvalRequests)
-    .where(and(eq(approvalRequests.orgId, ctx.orgId), status === "pending" ? eq(approvalRequests.status, "pending") : undefined))
+    .where(and(eq(approvalRequests.orgId, ctx.orgId), status === "pending" ? and(eq(approvalRequests.status, "pending"), eq(approvalRequests.historical, false)) : undefined))
     .orderBy(desc(approvalRequests.createdAt)).limit(500);
-  return rows.filter((r) => !r.productionId || productionAllowed(ctx, r.productionId)).map((r) => ({ ...r, canDecide: canDecide(ctx.role, r.requiredRole) && r.requestedBy !== ctx.userId && r.status === "pending" }));
+  return rows.filter((r) => !r.productionId || productionAllowed(ctx, r.productionId)).map((r) => ({ ...r, canDecide: !r.historical && canDecide(ctx.role, r.requiredRole) && r.requestedBy !== ctx.userId && r.status === "pending" }));
 }
 
 export async function approvalChain(ctx: Ctx, approvalId: string) {

@@ -1,0 +1,31 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tbldAycWzelaDgau1",
+  "table_name": "Shot List",
+  "records": [
+    {
+      "id": "recSynSh1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSh1": "1",
+        "fldSh2": [
+          "recSynSc1"
+        ],
+        "fldSh3": "WS",
+        "fldSh4": "Synthetic wide"
+      }
+    },
+    {
+      "id": "recSynSh2",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSh1": "2",
+        "fldSh2": [
+          "recSynSc1"
+        ],
+        "fldSh3": "CU",
+        "fldSh4": "Synthetic close-up"
+      }
+    }
+  ]
+}

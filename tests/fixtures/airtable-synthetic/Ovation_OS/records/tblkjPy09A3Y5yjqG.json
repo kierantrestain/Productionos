@@ -1,0 +1,26 @@
+{
+  "base_id": "appGbXugVx1UAfw6B",
+  "table_id": "tblkjPy09A3Y5yjqG",
+  "table_name": "Slate & IP",
+  "records": [
+    {
+      "id": "recSynIp1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSl1": "Synthetic Format A",
+        "fldSl2": "Development",
+        "fldSl3": "Gameshow",
+        "fldSl4": "Synthetic logline."
+      }
+    },
+    {
+      "id": "recSynIp2",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldSl1": "Synthetic Drama B",
+        "fldSl2": "Concept",
+        "fldSl3": "Scripted Series"
+      }
+    }
+  ]
+}

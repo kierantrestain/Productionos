@@ -1,0 +1,22 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tblrKqCF9PnjQ4bdt",
+  "table_name": "Episodes",
+  "records": [
+    {
+      "id": "recSynEp1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldEp1": 1,
+        "fldEp2": "Synthetic Episode 1",
+        "fldEp3": "Synthetic synopsis text, kept verbatim. Synthetic synopsis text, kept verbatim.",
+        "fldEp4": [
+          "recSynSc1",
+          "recSynSc2",
+          "recSynSc3"
+        ],
+        "fldEp5": 3
+      }
+    }
+  ]
+}

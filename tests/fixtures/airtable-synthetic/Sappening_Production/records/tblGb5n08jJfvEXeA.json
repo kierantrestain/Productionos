@@ -1,0 +1,18 @@
+{
+  "base_id": "appkx0tyAT1SDGSz5",
+  "table_id": "tblGb5n08jJfvEXeA",
+  "table_name": "Release Forms",
+  "records": [
+    {
+      "id": "recSynRe1",
+      "createdTime": "2026-10-01T09:00:00.000Z",
+      "fields": {
+        "fldRe1": "Synthetic release 1",
+        "fldRe2": [
+          "recSynCa1"
+        ],
+        "fldRe3": "Signed"
+      }
+    }
+  ]
+}
