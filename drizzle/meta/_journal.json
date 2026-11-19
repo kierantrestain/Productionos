@@ -57,6 +57,20 @@
       "when": 1795115572041,
       "tag": "0007_platform",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795200000000,
+      "tag": "0008_sso",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795200100000,
+      "tag": "0009_invite_platform_role",
+      "breakpoints": true
     }
   ]
 }

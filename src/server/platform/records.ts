@@ -56,7 +56,7 @@ async function nextAutonumber(tx: Tx, tableId: string) {
   return seq;
 }
 
-export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], opts: { tx?: Tx; afterRecordId?: string; origin?: "user" | "import" | "system"; skipPermission?: boolean } = {}) {
+export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], opts: { tx?: Tx; afterRecordId?: string; origin?: "user" | "import" | "system"; skipPermission?: boolean; automationDepth?: number } = {}) {
   const run = async (tx: Tx) => {
     const { table, access } = await tableContext(ctx, tableId, tx);
     if (!opts.skipPermission) { requireRole(access, table.permissions?.create ?? "editor", "add records to this table"); }
@@ -73,7 +73,7 @@ export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], o
       const [r] = await tx.insert(baseRecords).values({ orgId: ctx.orgId, tableId, data: vals, autonumber: seq, sortOrder, createdBy: ctx.userId, updatedBy: ctx.userId }).returning();
       for (const f of fields.filter((x) => x.type === "link" && x.id in vals)) await syncInverse(tx, f, r.id, [], (vals[f.id] as string[]) ?? []);
       await tx.insert(recordRevisions).values({ orgId: ctx.orgId, recordId: r.id, tableId, action: "create", changes: Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, { from: null, to: v }])), actorUserId: ctx.userId, actorLabel: ctx.name });
-      await emit(tx, { orgId: ctx.orgId, type: "record.created", entityType: "base_records", entityId: r.id, idempotencyKey: `record.created:${r.id}`, origin: opts.origin ?? "user", actorUserId: ctx.userId, payload: { tableId, baseId: table.baseId, values: vals, depth: 0 } });
+      await emit(tx, { orgId: ctx.orgId, type: "record.created", entityType: "base_records", entityId: r.id, idempotencyKey: `record.created:${r.id}`, origin: opts.origin ?? "user", actorUserId: ctx.userId, payload: { tableId, baseId: table.baseId, values: vals, depth: opts.automationDepth ?? 0 } });
       created.push(r.id);
     }
     if (created.length > 1) await audit(tx, ctx, "create_records", "base_tables", tableId, { meta: { count: created.length } });
@@ -82,7 +82,7 @@ export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], o
   return opts.tx ? run(opts.tx) : db.transaction(run);
 }
 
-export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, opts: { tx?: Tx; expectedVersion?: number; automationDepth?: number } = {}) {
+export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, opts: { tx?: Tx; expectedVersion?: number; automationDepth?: number; origin?: "user" | "import" | "system" } = {}) {
   const run = async (tx: Tx) => {
     const [cur] = await tx.select().from(baseRecords).where(and(eq(baseRecords.id, recordId), eq(baseRecords.orgId, ctx.orgId), isNull(baseRecords.deletedAt))).for("update").limit(1);
     if (!cur) throw notFound("Record not found.");
@@ -99,7 +99,7 @@ export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, op
     const [row] = await tx.update(baseRecords).set({ data: next, updatedAt: new Date(), updatedBy: ctx.userId, version: cur.version + 1 }).where(eq(baseRecords.id, recordId)).returning();
     for (const f of fields.filter((x) => x.type === "link" && x.id in changes)) await syncInverse(tx, f, recordId, (changes[f.id].from as string[]) ?? [], (changes[f.id].to as string[]) ?? []);
     await tx.insert(recordRevisions).values({ orgId: ctx.orgId, recordId, tableId: cur.tableId, action: "update", changes, actorUserId: ctx.userId, actorLabel: ctx.name });
-    await emit(tx, { orgId: ctx.orgId, type: "record.updated", entityType: "base_records", entityId: recordId, idempotencyKey: `record.updated:${recordId}:v${row.version}`, origin: opts.automationDepth ? "system" : "user", actorUserId: ctx.userId,
+    await emit(tx, { orgId: ctx.orgId, type: "record.updated", entityType: "base_records", entityId: recordId, idempotencyKey: `record.updated:${recordId}:v${row.version}`, origin: opts.origin ?? (opts.automationDepth ? "system" : "user"), actorUserId: ctx.userId,
       payload: { tableId: cur.tableId, baseId: table.baseId, changed: Object.keys(changes), values: Object.fromEntries(Object.entries(changes).map(([k, c]) => [k, c.to])), depth: opts.automationDepth ?? 0 } });
     return row;
   };

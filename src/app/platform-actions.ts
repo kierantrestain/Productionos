@@ -197,3 +197,46 @@ export async function aiFilterAction(viewId: string, query: string) {
     return naturalLanguageFilter(query, fields);
   });
 }
+
+// ───────── Interfaces / automations / sync ─────────
+export async function saveInterfaceAction(baseId: string, input: { id?: string; name: string; widgets: import("@/server/platform/interfaces").Widget[] }) {
+  return toResult(async () => { const { saveInterface } = await import("@/server/platform/interfaces"); const r = await saveInterface(await requireContext(), baseId, input); done(); return { id: r.id }; });
+}
+export async function deleteInterfaceAction(id: string) {
+  return toResult(async () => { const { deleteInterface } = await import("@/server/platform/interfaces"); await deleteInterface(await requireContext(), id); done(); });
+}
+export async function computeWidgetsAction(baseId: string, widgets: import("@/server/platform/interfaces").Widget[]) {
+  return toResult(async () => { const { computeWidgets } = await import("@/server/platform/interfaces"); return computeWidgets(await requireContext(), baseId, widgets); });
+}
+export async function saveAutomationAction(baseId: string, input: Parameters<typeof import("@/server/platform/automations").saveAutomation>[2]) {
+  return toResult(async () => { const { saveAutomation } = await import("@/server/platform/automations"); const r = await saveAutomation(await requireContext(), baseId, input); done(); return { id: r.id }; });
+}
+export async function deleteAutomationAction(id: string) {
+  return toResult(async () => { const { deleteAutomation } = await import("@/server/platform/automations"); await deleteAutomation(await requireContext(), id); done(); });
+}
+export async function automationRunsAction(id: string) {
+  return toResult(async () => { const { automationRuns } = await import("@/server/platform/automations"); const r = await automationRuns(await requireContext(), id); return r.map((x) => ({ id: x.id, status: x.status, result: x.result, error: x.lastError, at: x.startedAt.toISOString() })); });
+}
+export async function createSyncAction(baseId: string, input: Parameters<typeof import("@/server/platform/sync").createSync>[2]) {
+  return toResult(async () => { const { createSync } = await import("@/server/platform/sync"); const r = await createSync(await requireContext(), baseId, input); done(); return { id: r.id }; });
+}
+export async function runSyncAction(id: string) {
+  return toResult(async () => { const { runSync } = await import("@/server/platform/sync"); const r = await runSync(await requireContext(), id); done(); return r; });
+}
+export async function deleteSyncAction(id: string) {
+  return toResult(async () => { const { deleteSync } = await import("@/server/platform/sync"); await deleteSync(await requireContext(), id); done(); });
+}
+
+// ───────── Workspace: members, SSO ─────────
+export async function setPlatformRoleAction(userId: string, role: string) {
+  return toResult(async () => { const { setPlatformRole } = await import("@/server/platform/members"); await setPlatformRole(await requireContext(), userId, role); done(); });
+}
+export async function inviteMemberAction(email: string, role: string) {
+  return toResult(async () => { const { inviteMember } = await import("@/server/platform/members"); return inviteMember(await requireContext(), email, role); });
+}
+export async function setBaseMemberAction(baseId: string, userId: string, role: string | null) {
+  return toResult(async () => { const { setBaseMember } = await import("@/server/platform/members"); await setBaseMember(await requireContext(), baseId, userId, role); done(); });
+}
+export async function saveSsoAction(input: Parameters<typeof import("@/server/auth/sso").saveSso>[1]) {
+  return toResult(async () => { const { saveSso } = await import("@/server/auth/sso"); await saveSso(await requireContext(), input); done(); });
+}

@@ -150,6 +150,7 @@ test.describe.serial("producer journey", () => {
 test.describe("role security in the browser", () => {
   test("cast sees only their schedule; finance and productions are blocked", async ({ browser }) => {
     const cast = await login(browser, "cast");
+    await cast.goto("/my"); // home is now the workspace (bases); the production schedule lives at /my
     await expect(cast).toHaveURL(/\/my$/);
     await expect(cast.getByRole("heading", { name: "My schedule" })).toBeVisible();
     await cast.goto("/budgets");
@@ -227,17 +228,18 @@ test.describe("customisation (wizard, custom fields, rules)", () => {
     await admin.click("button:has-text('Add field')");
     await expect(admin.getByText(label).first()).toBeVisible();
     await admin.goto(scenesUrl);
+    await admin.waitForLoadState("networkidle"); // edit only after hydration
     await expect(admin.getByRole("columnheader", { name: label })).toBeVisible();
-    const editor = admin.getByRole("textbox", { name: label });
-    await expect(async () => {
-      await admin.getByRole("button", { name: `Edit ${label}` }).first().click();
-      await expect(editor).toBeVisible({ timeout: 1000 });
-    }).toPass({ timeout: 15000 });
+    const row = admin.locator("table.data tbody tr").first();
+    const editor = row.getByRole("textbox", { name: label });
+    await row.getByRole("button", { name: `Edit ${label}` }).click();
+    await expect(editor).toBeVisible();
     await editor.fill("GFX-001");
+    await expect(editor).toHaveValue("GFX-001");
     await editor.press("Enter");
-    await expect(admin.getByRole("button", { name: `Edit ${label}` }).first()).toHaveText("GFX-001");
+    await expect(row.getByRole("button", { name: `Edit ${label}` })).toHaveText("GFX-001");
     await admin.goto(scenesUrl);
-    await expect(admin.getByRole("button", { name: `Edit ${label}` }).first()).toHaveText("GFX-001");
+    await expect(admin.locator("table.data tbody tr").first().getByRole("button", { name: `Edit ${label}` })).toHaveText("GFX-001");
     await admin.context().close();
   });
 });

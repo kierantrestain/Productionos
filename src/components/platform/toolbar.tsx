@@ -33,7 +33,7 @@ export function ValueInput({ f, op, value, onChange }: { f: ClientField; op: str
   return <input aria-label="Value" style={{ ...sel, flex: 1 }} value={String(value ?? "")} placeholder={op.startsWith("isWithin") ? "days" : "Enter a value"} onChange={(e) => onChange(e.target.value)} />;
 }
 
-function ConditionList({ fields, conds, onChange }: { fields: ClientField[]; conds: Cond[]; onChange: (c: Cond[]) => void }) {
+export function ConditionList({ fields, conds, onChange }: { fields: ClientField[]; conds: Cond[]; onChange: (c: Cond[]) => void }) {
   return <>{conds.map((c, i) => {
     const f = fields.find((x) => x.id === c.fieldId) ?? fields[0];
     return (

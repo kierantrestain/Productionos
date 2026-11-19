@@ -147,3 +147,14 @@
 @media (max-width: 1100px) { .p-tlabel { display: none; } }
 @media (max-width: 800px) { .p-head .p-headtab { display: none; } .p-views:not(.collapsed) { display: flex; position: absolute; z-index: 30; top: 86px; bottom: 0; box-shadow: 0 8px 28px rgba(0,0,0,.2); } }
 .g-rows { min-height: calc(100% - 62px); }
+/* Chart palette — validated reference instance (fixed categorical order; light & dark steps). */
+:root { --viz-1: #2a78d6; --viz-2: #eb6834; --viz-3: #1baf7a; --viz-4: #eda100; --viz-5: #e87ba4; --viz-6: #008300; --viz-7: #6250d6; --viz-8: #e34948; --viz-other: #8a8984; --viz-grid: rgba(0,0,0,.08); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; --viz-6: #0ca30c; --viz-7: #9085e9; --viz-8: #e66767; --viz-grid: rgba(255,255,255,.1); } }
+:root[data-theme="dark"] { --viz-1: #3987e5; --viz-2: #d95926; --viz-3: #199e70; --viz-4: #c98500; --viz-5: #d55181; --viz-6: #0ca30c; --viz-7: #9085e9; --viz-8: #e66767; --viz-grid: rgba(255,255,255,.1); }
+.if-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 16px; align-content: start; overflow: auto; flex: 1; background: var(--color-background-muted); }
+.if-card { background: var(--color-background-card); border: 1px solid var(--color-border); border-radius: var(--radius-container); padding: 14px 16px; min-height: 140px; display: flex; flex-direction: column; min-width: 0; }
+.if-card h3 { font-size: 13px; font-weight: 600; color: var(--color-text-secondary); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+.if-num { font-size: 40px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--color-text-primary); }
+.if-tip { position: fixed; pointer-events: none; z-index: 200; background: var(--color-background-popover); border: 1px solid var(--color-border); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: 0 6px 18px rgba(0,0,0,.15); }
+.if-bar:hover, .if-arc:hover { opacity: .85; }
+@media (max-width: 900px) { .if-grid { grid-template-columns: minmax(0, 1fr); } .if-card { grid-column: auto !important; } }

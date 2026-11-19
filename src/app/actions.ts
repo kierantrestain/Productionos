@@ -33,6 +33,8 @@ export async function loginAction(_prev: unknown, form: FormData): Promise<{ err
   const password = String(form.get("password") ?? "");
   const u = await authenticate(email, password);
   if (!u) return { error: "Email or password is incorrect." };
+  const { passwordBlockedBySso } = await import("@/server/auth/sso");
+  if (await passwordBlockedBySso(u.id, u.email)) return { error: "Your workspace requires single sign-on. Use “Sign in with SSO” below." };
   const token = await createSession(u.id, undefined, (await headers()).get("user-agent") ?? undefined);
   (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_TTL_MS / 1000 });
   const next = String(form.get("next") ?? "/");
@@ -307,7 +309,7 @@ export async function archiveFieldDefAction(id: string) {
   return toResult(async () => { const { archiveFieldDef } = await import("@/server/services/customise"); await archiveFieldDef(await requireContext(), id); done(); });
 }
 export async function setCustomValueAction(entity: string, recordId: string, key: string, value: unknown) {
-  return toResult(async () => { const { setCustomValues } = await import("@/server/services/customise"); const ctx = await requireContext(); await setCustomValues(ctx, entity, recordId, { [key]: value }); done(); });
+  return toResult(async () => { const { setCustomValues } = await import("@/server/services/customise"); const ctx = await requireContext(); await setCustomValues(ctx, entity, recordId, { [key]: value }); done(); return true; });
 }
 
 // ───────────── Templates ─────────────

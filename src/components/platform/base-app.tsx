@@ -5,14 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Button } from "@astryxdesign/core/Button";
-import { ChevronDown, Home, Plus, Search, User, Users, Upload, Table2, Lock } from "lucide-react";
+import { ChevronDown, Plus, Search, User, Users, Upload, Table2, Lock } from "lucide-react";
 import type { ViewConfig } from "@/db/schema";
 import { isComputed } from "@/lib/platform/fields";
 import {
   aiFillFieldAction, archiveFieldAction, archiveTableAction, archiveViewAction, createFieldAction, createRecordsAction, createTableAction, createViewAction,
   deleteRecordsAction, loadViewAction, setRowColorAction, updateBaseAction, updateCellsAction, updateTableAction, updateViewAction, updateViewConfigAction,
 } from "@/app/platform-actions";
-import { BaseIcon, VIEW_ICONS, VIEW_LABELS } from "./icons";
+import { VIEW_ICONS, VIEW_LABELS } from "./icons";
+import { BaseHeader, HEAD_BG } from "./base-header";
 import { Grid, type CellEdit } from "./grid";
 import { Toolbar } from "./toolbar";
 import { FieldDialog } from "./field-dialog";
@@ -22,7 +23,6 @@ import { CalendarView, FormView, GalleryView, KanbanView, ListView, TimelineView
 import { toServerValue } from "./cells";
 import type { BaseData, ClientField, ClientRow } from "./types";
 
-const HEAD_BG: Record<string, string> = { blue: "#1f6feb", cyan: "#0891b2", teal: "#0d9488", green: "#15803d", yellow: "#b45309", orange: "#c2410c", red: "#be123c", pink: "#be185d", purple: "#7c3aed", gray: "#475569" };
 
 export function BaseApp({ data }: { data: BaseData }) {
   const router = useRouter();
@@ -148,16 +148,9 @@ export function BaseApp({ data }: { data: BaseData }) {
 
   return (
     <div className="p-base">
-      <header className="p-head" style={{ background: HEAD_BG[data.base.color] ?? HEAD_BG.blue }}>
-        <Link href="/" aria-label="All bases" className="p-ghost" style={{ display: "inline-flex", padding: 6, borderRadius: 6 }}><Home size={18} /></Link>
-        <span style={{ display: "inline-grid", placeItems: "center", width: 30, height: 30, borderRadius: 8, background: "rgba(255,255,255,.18)" }}><BaseIcon name={data.base.icon} size={18} /></span>
-        {data.can.schema
-          ? <input className="p-name" aria-label="Base name" defaultValue={data.base.name} onBlur={async (e) => { const n = e.target.value.trim(); if (n && n !== data.base.name) { const r = await updateBaseAction(data.base.id, { name: n }); if (!r.ok) notify(r.error); } }} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} style={{ width: `${Math.max(8, data.base.name.length + 2)}ch` }} />
-          : <span className="p-name">{data.base.name}</span>}
-        <span className="p-headtab" aria-current="page">Data</span>
-        <span style={{ flex: 1 }} />
-        <span className="chip" style={{ background: "rgba(255,255,255,.18)", color: "#fff" }} title="Your access to this base">{data.role}{data.role === "commenter" || data.role === "reader" ? " · free seat" : ""}</span>
-      </header>
+      <BaseHeader base={data.base} role={data.role} active="data" nameSlot={data.can.schema
+        ? <input className="p-name" aria-label="Base name" defaultValue={data.base.name} onBlur={async (e) => { const n = e.target.value.trim(); if (n && n !== data.base.name) { const r = await updateBaseAction(data.base.id, { name: n }); if (!r.ok) notify(r.error); } }} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} style={{ width: `${Math.max(8, data.base.name.length + 2)}ch` }} />
+        : undefined} />
       <nav className="p-tables" role="tablist" aria-label="Tables" style={{ background: HEAD_BG[data.base.color] ?? HEAD_BG.blue }}>
         {data.tables.map((t) => t.id === data.table.id && data.can.schema ? (
           <DropdownMenu key={t.id} menuWidth={200} items={[

@@ -17,12 +17,15 @@ export async function createOrganisation(input: { name: string; slug: string; is
   return org;
 }
 
-export async function createUserWithMembership(input: { orgId: string; email: string; name: string; password?: string | null; role: Role; personId?: string | null; productionIds?: string[] }, tx: DbOrTx = db) {
+/** Default platform role for a production role (matches the 0007 backfill). */
+export const platformRoleFor = (role: string) => role === "org_admin" ? "owner" : ["executive", "producer"].includes(role) ? "creator" : ["cast", "crew", "external_reviewer"].includes(role) ? "commenter" : "editor";
+
+export async function createUserWithMembership(input: { orgId: string; email: string; name: string; password?: string | null; role: Role; personId?: string | null; productionIds?: string[]; platformRole?: string | null }, tx: DbOrTx = db) {
   if (!ROLES.includes(input.role)) throw invalid("Unknown role");
   const email = input.email.trim().toLowerCase();
   let [u] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
   if (!u) [u] = await tx.insert(users).values({ email, name: input.name, passwordHash: input.password ? await hashPassword(input.password) : null }).returning();
-  await tx.insert(memberships).values({ orgId: input.orgId, userId: u.id, role: input.role, personId: input.personId ?? null })
+  await tx.insert(memberships).values({ orgId: input.orgId, userId: u.id, role: input.role, personId: input.personId ?? null, platformRole: input.platformRole ?? platformRoleFor(input.role) })
     .onConflictDoUpdate({ target: [memberships.orgId, memberships.userId], set: { role: input.role, personId: input.personId ?? null } });
   for (const pid of input.productionIds ?? []) await tx.insert(productionMembers).values({ orgId: input.orgId, productionId: pid, userId: u.id }).onConflictDoNothing();
   return u;
@@ -86,7 +89,7 @@ export async function acceptInvite(token: string, name: string, password: string
   return db.transaction(async (tx) => {
     const [inv] = await tx.select().from(invites).where(and(eq(invites.tokenHash, sha256(token)), isNull(invites.acceptedAt))).limit(1);
     if (!inv || inv.expiresAt < new Date()) throw invalid("This invitation is invalid or has expired.");
-    const u = await createUserWithMembership({ orgId: inv.orgId, email: inv.email, name, password, role: inv.role as Role, productionIds: inv.productionIds }, tx);
+    const u = await createUserWithMembership({ orgId: inv.orgId, email: inv.email, name, password, role: inv.role as Role, productionIds: inv.productionIds, platformRole: inv.platformRole }, tx);
     await tx.update(invites).set({ acceptedAt: new Date() }).where(eq(invites.id, inv.id));
     return { userId: u.id, orgId: inv.orgId };
   });

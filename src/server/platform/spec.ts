@@ -3,7 +3,7 @@
  * CSV/Excel import. Specs reference tables and fields by name; links, lookups, rollups and formulas
  * are resolved to ids here. Seed records never trigger automations (origin = import).
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { baseFields, baseRecords, baseViews, type ViewConfig } from "@/db/schema";
 import { FIELD_TYPES, newChoiceId, type FieldOptions, type FieldType, COLORS } from "@/lib/platform/fields";
@@ -96,7 +96,7 @@ export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec, opts: { intoB
       byTitle.set(t.name, new Map(ids.map((id, i) => [String(t.records![i][t.fields[0].name] ?? ""), id])));
     }
     // 5. Link values by primary text (both sides kept in sync).
-    for (const t of spec.tables) for (const [ri, r] of (t.records ?? []).entries()) {
+    for (const t of spec.tables) for (const r of t.records ?? []) {
       // Declared links plus auto-created inverse links (seed data may set either side).
       const linkKeys = Object.keys(r).filter((k) => linkTarget.has(key(t.name, k)));
       for (const f of linkKeys.map((k) => ({ name: k, linkTo: linkTarget.get(key(t.name, k))! }))) {
@@ -116,20 +116,30 @@ export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec, opts: { intoB
         }
       }
     }
-    // 6. Computed fields (validated exactly as if created in the UI).
-    for (const t of spec.tables) for (const [i, f] of t.fields.entries()) {
-      if (!["lookup", "rollup", "count", "formula"].includes(f.type)) continue;
-      const tid = tableIds.get(t.name)!;
-      let opts: FieldOptions = { ...(f.options ?? {}) };
-      if (f.type !== "formula") {
-        const linked = f.via ? linkTarget.get(key(t.name, f.via)) : undefined;
-        if (!linked) throw invalid(`${t.name}.${f.name}: “via” must name a link field`);
-        opts.linkFieldId = fieldIds.get(key(t.name, f.via!));
-        if (f.type !== "count") opts.targetFieldId = fieldIds.get(key(linked, f.target ?? ""));
-        if (f.type === "rollup") opts.rollupFn = (f.fn as FieldOptions["rollupFn"]) ?? "sum";
-      } else opts.formula = f.formula;
-      opts = await validateComputed(tx, tid, f.type, opts);
-      await insertField(t.name, f, opts, i * 2);
+    // 6. Computed fields (validated exactly as if created in the UI), in dependency order — a rollup can
+    //    target, and a formula can reference, a calculated field that another table defines.
+    let pending = spec.tables.flatMap((t) => t.fields.map((f, i) => ({ t, f, i }))).filter((x) => ["lookup", "rollup", "count", "formula"].includes(x.f.type));
+    const ready = ({ t, f }: (typeof pending)[number]) => {
+      if (f.type === "formula") return [...(f.formula ?? "").matchAll(/\{([^}]+)\}/g)].every((m) => fieldIds.has(key(t.name, m[1])));
+      if (!fieldIds.has(key(t.name, f.via ?? ""))) return false;
+      return f.type === "count" || fieldIds.has(key(linkTarget.get(key(t.name, f.via!)) ?? "", f.target ?? ""));
+    };
+    while (pending.length) {
+      const now = pending.filter(ready);
+      if (!now.length) { const x = pending[0]; throw invalid(`${x.t.name}.${x.f.name} refers to a field that doesn't exist (or a circular reference).`); }
+      for (const { t, f, i } of now) {
+        const tid = tableIds.get(t.name)!;
+        let opts: FieldOptions = { ...(f.options ?? {}) };
+        if (f.type !== "formula") {
+          const linked = linkTarget.get(key(t.name, f.via!))!;
+          opts.linkFieldId = fieldIds.get(key(t.name, f.via!));
+          if (f.type !== "count") opts.targetFieldId = fieldIds.get(key(linked, f.target ?? ""));
+          if (f.type === "rollup") opts.rollupFn = (f.fn as FieldOptions["rollupFn"]) ?? "sum";
+        } else opts.formula = f.formula;
+        opts = await validateComputed(tx, tid, f.type, opts);
+        await insertField(t.name, f, opts, i * 2);
+      }
+      pending = pending.filter((x) => !now.includes(x));
     }
     // 7. Extra views.
     for (const t of spec.tables) for (const v of t.views ?? []) {

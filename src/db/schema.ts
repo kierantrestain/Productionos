@@ -85,6 +85,8 @@ export const invites = pgTable("invites", {
   role: text("role").notNull(),
   tokenHash: text("token_hash").notNull().unique(),
   productionIds: jsonb("production_ids").$type<string[]>().notNull().default([]),
+  /** Platform role granted on acceptance (owner | creator | editor | commenter | reader). */
+  platformRole: text("platform_role"),
   invitedBy: uuid("invited_by"),
   acceptedAt: ts("accepted_at"),
   expiresAt: ts("expires_at").notNull(),
@@ -1341,4 +1343,18 @@ export const syncSources = pgTable("sync_sources", {
   lastSyncedAt: ts("last_synced_at"),
   lastError: text("last_error"),
   lastStats: jsonb("last_stats").$type<Record<string, unknown>>(),
+});
+
+/** Per-organisation OpenID Connect single sign-on. The client secret is AES-GCM encrypted. */
+export const ssoConfigs = pgTable("sso_configs", {
+  orgId: uuid("org_id").primaryKey().references(() => organisations.id, { onDelete: "cascade" }),
+  issuer: text("issuer").notNull(),
+  clientId: text("client_id").notNull(),
+  clientSecretCipher: text("client_secret_cipher"),
+  allowedDomains: jsonb("allowed_domains").$type<string[]>().notNull().default([]),
+  defaultRole: text("default_role").notNull().default("reader"),
+  isEnabled: boolean("is_enabled").notNull().default(false),
+  enforce: boolean("enforce").notNull().default(false),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
 });

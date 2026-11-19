@@ -103,6 +103,11 @@ export async function processOutbox(opts: { limit?: number; orgId?: string } = {
         await recordRun(e, rule.key, rule.ruleVersion, "failed", null, String((err as Error)?.message ?? err).slice(0, 500));
       }
     }
+    // Base-platform automations (idempotent per automation+event; failures recorded, never block).
+    if (e.type === "record.created" || e.type === "record.updated") {
+      const { runAutomationsForEvent } = await import("@/server/platform/automations");
+      await runAutomationsForEvent(e).catch(() => {});
+    }
     const handler = HANDLERS[e.type];
     if (!handler) {
       await db.update(outboxEvents).set({ status: "done", processedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, e.id));

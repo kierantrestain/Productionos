@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getEntity, type FieldDef } from "@/lib/entities";
 import { date, dateTime, humanize, money, pct, time, tone } from "@/lib/format";
 import { archiveRecords, batchUpdateRecords, deleteViewAction, saveViewAction, setCustomValueAction, updateRecord } from "@/app/actions";
@@ -225,20 +225,31 @@ function CustomCell({ c, entity, row, value, canWrite }: { c: CustomFieldDefShap
   const { run } = useRun();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<unknown>(value);
+  const saving = useRef(false);
+  const latest = useRef<unknown>(value); // read by Enter/blur so a stale render closure can't drop the edit
+  const [optimistic, setOptimistic] = useState<{ v: unknown } | null>(null);
+  useEffect(() => setOptimistic(null), [value]);
   const f = customAsField(c);
   const save = async (v: unknown) => {
+    if (saving.current) return; // Enter then blur would otherwise save twice and race the refresh.
+    saving.current = true;
     setEditing(false);
     const fv = finalise(f, v);
-    if (JSON.stringify(fv ?? null) === JSON.stringify(value ?? null)) return;
-    if (await run(setCustomValueAction(entity, row.id, c.key, fv)) !== undefined) router.refresh();
+    try {
+      if (JSON.stringify(fv ?? null) === JSON.stringify(value ?? null)) return;
+      setOptimistic({ v: fv });
+      if (await run(setCustomValueAction(entity, row.id, c.key, fv)) !== undefined) router.refresh();
+      else setOptimistic(null);
+    } finally { saving.current = false; }
   };
-  const shown = value === null || value === undefined || value === "" ? <span className="subtle">—</span>
-    : c.type === "money" ? money(Number(value)) : c.type === "date" ? date(String(value)) : c.type === "bool" ? (value ? "Yes" : "No")
-    : c.type === "url" ? <a href={String(value)} target="_blank" rel="noreferrer noopener">{String(value).replace(/^https?:\/\//, "").slice(0, 30)}</a> : String(value);
+  const v0 = optimistic ? optimistic.v : value;
+  const shown = v0 === null || v0 === undefined || v0 === "" ? <span className="subtle">—</span>
+    : c.type === "money" ? money(Number(v0)) : c.type === "date" ? date(String(v0)) : c.type === "bool" ? (v0 ? "Yes" : "No")
+    : c.type === "url" ? <a href={String(v0)} target="_blank" rel="noreferrer noopener">{String(v0).replace(/^https?:\/\//, "").slice(0, 30)}</a> : String(v0);
   return (
     <td className={["number", "money"].includes(c.type) ? "num" : ""}>
-      {editing ? <FieldInput f={f} value={draft} compact autoFocus onChange={(v) => { setDraft(v); if (["select", "bool", "date"].includes(c.type)) save(v); }} onBlur={() => save(draft)} onKeyDown={(e) => { if (e.key === "Enter") save(draft); if (e.key === "Escape") setEditing(false); }} />
-        : canWrite ? <button className="cell-btn" aria-label={`Edit ${c.label}`} onClick={() => { setDraft(value); setEditing(true); }}>{shown}</button> : shown}
+      {editing ? <FieldInput f={f} value={draft} compact autoFocus onChange={(v) => { latest.current = v; setDraft(v); if (["select", "bool", "date"].includes(c.type)) save(v); }} onBlur={() => save(latest.current)} onKeyDown={(e) => { if (e.key === "Enter") save(latest.current); if (e.key === "Escape") setEditing(false); }} />
+        : canWrite ? <button className="cell-btn" aria-label={`Edit ${c.label}`} onClick={() => { latest.current = value; setDraft(value); setEditing(true); }}>{shown}</button> : shown}
     </td>
   );
 }

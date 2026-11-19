@@ -22,7 +22,7 @@ describe("formula language", () => {
     expect(ev('"Hi " & UPPER({n})')).toBe("Hi KIM");
     expect(ev('IF({a} > 2, "big", "small")')).toBe("big");
     expect(ev("DATETIME_DIFF(TODAY(), {d}, 'days')")).toBe(10);
-    expect(ev("DATETIME_FORMAT(DATEADD({d}, 1, 'months'), 'YYYY-MM-DD')")).toBe("2028-03-02");
+    expect(ev("DATETIME_FORMAT(DATEADD({d}, 1, 'months'), 'YYYY-MM-DD')")).toBe("2028-02-29");
     expect(ev("ROUND(10 / 3, 2)")).toBe(3.33);
     expect(ev("ARRAYJOIN({tags}, ' | ')")).toBe("x | y");
     expect(ev("{a} / 0")).toBeNull();
@@ -171,6 +171,33 @@ describe("templates", () => {
       for (const tid of Object.values(r.tableIds)) await runView(owner, "owner", tid, {});
     }
     expect(TEMPLATES.length).toBeGreaterThanOrEqual(8);
+  });
+  it("Business OS: receivables, instalments, commission and progress compute from relations", async () => {
+    const { templateSpec } = await import("@/server/platform/templates");
+    const r = await createBaseFromSpec(owner, templateSpec("business"));
+    const tv = async (t: string) => { const v = await runView(owner, "owner", r.tableIds[t], {}); return { v, id: (n: string) => v.fields.find((f) => f.name === n)!.id }; };
+    const inv = await tv("Invoices");
+    const byName = (n: string) => inv.v.rows.find((x) => String(x.values[inv.id("Invoice")]).endsWith(n))!;
+    expect(byName("INV-1001").values[inv.id("Outstanding")]).toBe(0);
+    expect(byName("INV-1002").values[inv.id("Received")]).toBe(500);
+    expect(byName("INV-1002").values[inv.id("Outstanding")]).toBe(500);
+    const pay = await tv("Payments");
+    expect(pay.v.rows[0].values[pay.id("Unallocated")]).toBe(0);
+    const plan = await tv("Payment plans");
+    const p0 = plan.v.rows[0].values;
+    expect(p0[plan.id("Instalment amount")]).toBe(2166.66);
+    expect(p0[plan.id("Final instalment")]).toBe(2166.68);
+    expect(p0[plan.id("Instalment 2 due")]).toBe("2027-04-01");
+    expect(p0[plan.id("Instalment 3 due")]).toBe("2027-05-01");
+    expect(p0[plan.id("Instalment 4 due")]).toBeNull();
+    const com = await tv("Commissions");
+    expect(com.v.rows[0].values[com.id("Commission amount")]).toBe(150);
+    const prj = await tv("Projects");
+    expect(prj.v.rows[0].values[prj.id("Progress")]).toBe(0.5);
+    const acc = await tv("Accounts");
+    const nw = acc.v.rows.find((x) => String(x.values[acc.id("Account")]).includes("Northwind"))!;
+    expect(nw.values[acc.id("Outstanding")]).toBe(500);
+    for (const k of ["agency", "coaching", "sales"]) await createBaseFromSpec(owner, templateSpec(k));
   });
   it("seed values on auto-created inverse links are linked both ways and roll up", async () => {
     const { templateSpec } = await import("@/server/platform/templates");

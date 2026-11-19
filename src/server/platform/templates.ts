@@ -4,6 +4,7 @@
  */
 import type { BaseSpec } from "./spec";
 import { invalid } from "../errors";
+import { BUSINESS_PACKS, businessSpec } from "./business-os";
 
 export interface TemplateMeta { key: string; name: string; description: string; category: string; icon: string; color: string }
 
@@ -114,6 +115,8 @@ const T: Record<string, TemplateMeta & { spec: () => BaseSpec }> = {
     ] }),
   },
 };
+
+for (const [key, p] of Object.entries(BUSINESS_PACKS)) T[key] = { key, name: p.name, description: p.description, category: "Business OS", icon: p.icon, color: p.color, spec: () => businessSpec(key) };
 
 export const TEMPLATES: TemplateMeta[] = Object.values(T).map(({ spec: _s, ...m }) => m);
 export function templateSpec(key: string): BaseSpec {

@@ -98,7 +98,8 @@ const toBool = (v: V): boolean => (Array.isArray(v) ? v.length > 0 : typeof v ==
 const toDate = (v: V): Date | null => { if (isBlank(v)) return null; const d = v instanceof Date ? v : new Date(typeof v === "string" && v.length === 10 ? `${v}T00:00:00Z` : String(v)); return Number.isNaN(d.getTime()) ? null : d; };
 const UNIT_MS: Record<string, number> = { milliseconds: 1, seconds: 1e3, minutes: 6e4, hours: 36e5, days: 864e5, weeks: 6048e5 };
 const unit = (u: V) => { const s = toStr(u || "days").toLowerCase().replace(/s?$/, "s"); return s; };
-function addMonths(d: Date, n: number) { const x = new Date(d); x.setUTCMonth(x.getUTCMonth() + n); return x; }
+/** Calendar months, clamped to the target month's last day (31 Jan + 1 month = 28/29 Feb). */
+function addMonths(d: Date, n: number) { const x = new Date(d); const day = x.getUTCDate(); x.setUTCDate(1); x.setUTCMonth(x.getUTCMonth() + n); const last = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate(); x.setUTCDate(Math.min(day, last)); return x; }
 function fmtDate(d: Date, f: string) {
   const p = (n: number, l = 2) => String(n).padStart(l, "0");
   const M = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];

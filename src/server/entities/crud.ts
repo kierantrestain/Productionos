@@ -234,7 +234,7 @@ export async function listEntity(ctx: Ctx, key: string, opts: ListOpts = {}): Pr
   const page = Math.max(opts.page ?? 1, 1);
   const order = dir === "desc" ? sql`${sortCol} desc nulls last` : sql`${sortCol} asc nulls last`;
   const [rowsRaw, [{ n }]] = await Promise.all([
-    db.select().from(t).where(where).orderBy(order, asc(t.createdAt)).limit(pageSize).offset((page - 1) * pageSize),
+    db.select().from(t).where(where).orderBy(order, asc(t.createdAt), asc(t.id)).limit(pageSize).offset((page - 1) * pageSize),
     db.select({ n: count() }).from(t).where(where),
   ]);
   let redacted: string[] = [];
