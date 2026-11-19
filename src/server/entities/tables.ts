@@ -1,0 +1,64 @@
+import * as s from "@/db/schema";
+import type { RegisteredEntityKey } from "@/lib/entities";
+
+/** Registry key → Drizzle table. Every registered entity must appear here (enforced by test). */
+export const TABLES = {
+  business_units: s.businessUnits,
+  legal_entities: s.legalEntities,
+  strategic_initiatives: s.strategicInitiatives,
+  risks: s.risks,
+  kpis: s.kpis,
+  decisions: s.decisions,
+  meetings: s.meetings,
+  territories: s.territories,
+  ip_projects: s.ipProjects,
+  development_materials: s.developmentMaterials,
+  creative_reviews: s.creativeReviews,
+  packaging_items: s.packagingItems,
+  greenlight_gates: s.greenlightGates,
+  productions: s.productions,
+  seasons: s.seasons,
+  episodes: s.episodes,
+  scenes: s.scenes,
+  shots: s.shots,
+  takes: s.takes,
+  shoot_days: s.shootDays,
+  transport_bookings: s.transportBookings,
+  catering_orders: s.cateringOrders,
+  resource_bookings: s.resourceBookings,
+  location_bookings: s.locationBookings,
+  people: s.people,
+  companies: s.companies,
+  engagements: s.engagements,
+  availability_blocks: s.availabilityBlocks,
+  locations: s.locations,
+  resources: s.resources,
+  resource_checkouts: s.resourceCheckouts,
+  budgets: s.budgets,
+  budget_lines: s.budgetLines,
+  purchase_orders: s.purchaseOrders,
+  expenses: s.expenses,
+  funding_sources: s.fundingSources,
+  contracts: s.contracts,
+  contract_obligations: s.contractObligations,
+  release_forms: s.releaseForms,
+  rights_entries: s.rightsEntries,
+  licence_windows: s.licenceWindows,
+  media_assets: s.mediaAssets,
+  post_tasks: s.postTasks,
+  edit_versions: s.editVersions,
+  review_comments: s.reviewComments,
+  deliverables: s.deliverables,
+  releases: s.releases,
+  sales_opportunities: s.salesOpportunities,
+  sponsor_deals: s.sponsorDeals,
+  commercial_deliverables: s.commercialDeliverables,
+  tasks: s.tasks,
+  sops: s.sops,
+} satisfies Record<RegisteredEntityKey, unknown>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type AnyTable = any;
+export function tableFor(key: RegisteredEntityKey): AnyTable {
+  return TABLES[key];
+}

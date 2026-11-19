@@ -1,0 +1,12 @@
+# Security / confidentiality / cutover rules
+
+1. **IMPORTANT CURRENT STATE:** `kierantrestain/Productionos` was confirmed **PUBLIC** and EMPTY on 2026-11-19. Change to **PRIVATE** before adding confidential source datasets, unpublished scripts/IP, actor details, cast contact information, contract/rights documents, bank details, credentials or internal commercial numbers. Public Git history is not a safe place for secrets even if files are later deleted.
+2. The handoff ZIP contains only project plans, base/table IDs, table-name inventory and counts. It does not include private cast/contract records or Airtable tokens. Keep source exports outside the repo in restricted storage. `.gitignore` is included to block common accident paths.
+3. The source audit reported a **hard-coded bearer credential in the deployed S’appening `Send Cast Contract` automation**. Treat it as exposed: have the owner revoke/rotate the credential at its issuing provider, review access, then store replacement only in encrypted deployment secret manager. Do not reuse or print it.
+4. Auth uses managed identity or carefully implemented passwordless/OAuth plus organisation memberships; server enforces role + production scope on every read, upload, mutation, export and search. Never trust client-side filtering for security.
+5. Sensitive fields (home addresses, phone/email, compensation, contracts, signature artifacts, immigration/identity, bank details) require granular permission; minimise retention and secure transmission. UK GDPR compliance and privacy procedures appropriate to actual processing.
+6. Use application audit trails on sensitive mutations, immutable issued callsheets and user revocations. Redact secrets/PII from logs, test fixtures, browser screenshots and errors.
+7. Encryption in transit and at rest; signed expiring URLs; malware checks/file limits; backup, restore drills and documented retention/erasure flow.
+8. Budget/spend approvals, e-signature state, outbound email and public releases need explicit confirmation, attributable approver and idempotency protection.
+9. Migrations must be read-only against Airtable. Import to staging first, reconcile all lineages, attachments and links, repeat import for idempotency and get explicit authorisation before cutover. Never disable/delete source Airtable autonomously.
+10. REA, inspection, scraping and media retrieval are limited to resources with permission. Observe visible product workflows; do not copy protected underlying implementation or bypass external access controls.

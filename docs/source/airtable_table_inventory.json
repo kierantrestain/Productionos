@@ -1,0 +1,639 @@
+{
+  "audit_date": "2026-11-19",
+  "sources": {
+    "Ovation OS": "appGbXugVx1UAfw6B",
+    "S’appening Production": "appkx0tyAT1SDGSz5"
+  },
+  "tables": [
+    {
+      "table": "Business Units & P&L",
+      "fields": 20,
+      "records": 8,
+      "source_base": "Ovation OS",
+      "table_id": "tblys7iJlH3sMJJEN"
+    },
+    {
+      "table": "Legal Entities & SPVs",
+      "fields": 23,
+      "records": 1,
+      "source_base": "Ovation OS",
+      "table_id": "tblk1UW2hlhOTr9I5"
+    },
+    {
+      "table": "Strategic Initiatives & Milestones",
+      "fields": 17,
+      "records": 10,
+      "source_base": "Ovation OS",
+      "table_id": "tblswQ2lpq4DtJuUo"
+    },
+    {
+      "table": "Governance & Approvals",
+      "fields": 22,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tblMYEFhQ3PT99zMI"
+    },
+    {
+      "table": "Slate & IP",
+      "fields": 65,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tblkjPy09A3Y5yjqG"
+    },
+    {
+      "table": "Development Materials",
+      "fields": 15,
+      "records": 36,
+      "source_base": "Ovation OS",
+      "table_id": "tblNu192tq8gYMElw"
+    },
+    {
+      "table": "Development & Greenlight Reviews",
+      "fields": 31,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tblKcYEZAJAACxKZG"
+    },
+    {
+      "table": "Packaging & Attachments",
+      "fields": 15,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblMT444gKdp6uhrg"
+    },
+    {
+      "table": "Rights & Chain of Title",
+      "fields": 14,
+      "records": 24,
+      "source_base": "Ovation OS",
+      "table_id": "tbl9W27htPh7sad3u"
+    },
+    {
+      "table": "Capital Pools & Raises",
+      "fields": 18,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tblWI1eZJ563OLNCs"
+    },
+    {
+      "table": "Investors & Capital Relationships",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblhoY736Onmp7ebK"
+    },
+    {
+      "table": "Funding Commitments & Finance Stack",
+      "fields": 23,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblRInYVUaqrAMOkh"
+    },
+    {
+      "table": "Incentives & Rebates",
+      "fields": 22,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl666Zr8zkFMMfCL"
+    },
+    {
+      "table": "Productions",
+      "fields": 65,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbljzVavneKQoldiY"
+    },
+    {
+      "table": "Production Schedule",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblk1ADu0xGK5FcsM"
+    },
+    {
+      "table": "Budget Lines",
+      "fields": 21,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblqDFqxnDWfqtsfx"
+    },
+    {
+      "table": "Purchase Orders & Commitments",
+      "fields": 24,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblcJzQwokvaNm9Lh"
+    },
+    {
+      "table": "Suppliers & Vendors",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblHnxXGfx1TGjKbr"
+    },
+    {
+      "table": "Team & Crew",
+      "fields": 33,
+      "records": 2,
+      "source_base": "Ovation OS",
+      "table_id": "tbl1Xc76mWpGPDNuH"
+    },
+    {
+      "table": "Crew Assignments & Availability",
+      "fields": 20,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblKDNpCwfKUug4LM"
+    },
+    {
+      "table": "Cast & Contributors",
+      "fields": 15,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblMPMVlmIbmk3fjl"
+    },
+    {
+      "table": "Locations & Facilities",
+      "fields": 23,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblnSvK5FiTULK2Yb"
+    },
+    {
+      "table": "Equipment & Assets",
+      "fields": 20,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblY06SsiHE16iiA2"
+    },
+    {
+      "table": "Asset Bookings & Hires",
+      "fields": 19,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblt1w9fUQck2pjaf"
+    },
+    {
+      "table": "Post & Delivery Workflow",
+      "fields": 23,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblzZeqrxrbVIeRVI"
+    },
+    {
+      "table": "Delivery Requirements",
+      "fields": 18,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl8hFuyL0tM40czz"
+    },
+    {
+      "table": "Companies & Partners",
+      "fields": 29,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl8RZ5iLRsQFpPe1"
+    },
+    {
+      "table": "Contacts",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbll1tB1ZkZnOH6OX"
+    },
+    {
+      "table": "Buyer & Market Intelligence",
+      "fields": 21,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblVfK7t0dBdv4nMP"
+    },
+    {
+      "table": "Sales & Licensing Pipeline",
+      "fields": 20,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblXjR6d8Ah8aj4j7"
+    },
+    {
+      "table": "Rights Deals & Licence Windows",
+      "fields": 34,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl0eB6H9aapvTEl2"
+    },
+    {
+      "table": "Catalogue & Exploitation",
+      "fields": 28,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbltFaNOXqFYPCtzN"
+    },
+    {
+      "table": "Franchise & Derivative Rights",
+      "fields": 14,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl0aoUysZMvFEpos"
+    },
+    {
+      "table": "Contracts & Agreements",
+      "fields": 26,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblUsBNQeuvEDgfdv"
+    },
+    {
+      "table": "Contract Obligations",
+      "fields": 12,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl7LD20N1Z0yS2zC"
+    },
+    {
+      "table": "Bank Accounts",
+      "fields": 15,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblkXBcxtpVjuNAcW"
+    },
+    {
+      "table": "Finance Transactions",
+      "fields": 22,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbltu90im9sKo5ibJ"
+    },
+    {
+      "table": "Cash Forecast & Runway",
+      "fields": 21,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblGD9joiGG2fkwUc"
+    },
+    {
+      "table": "Risk Register",
+      "fields": 19,
+      "records": 8,
+      "source_base": "Ovation OS",
+      "table_id": "tble6AX5q30HgGZgT"
+    },
+    {
+      "table": "KPIs & Targets",
+      "fields": 18,
+      "records": 14,
+      "source_base": "Ovation OS",
+      "table_id": "tblh5LjFsQIDDYNpm"
+    },
+    {
+      "table": "Board Meetings",
+      "fields": 12,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl6qu7c6XJsXnZqc"
+    },
+    {
+      "table": "Management Packs",
+      "fields": 20,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl4RQ519UNGOExSc"
+    },
+    {
+      "table": "Strategic Partnerships",
+      "fields": 17,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblN9LmsqcDNOjt3R"
+    },
+    {
+      "table": "Build Partner Buy Decisions",
+      "fields": 20,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl3hbagWldR5SNbj"
+    },
+    {
+      "table": "Acquisition Targets",
+      "fields": 18,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblzWdQzcEWDl2ksP"
+    },
+    {
+      "table": "Brand & Commercial Integrations",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblSDKwzYadAfuqZn"
+    },
+    {
+      "table": "Release & Distribution",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl9VcjogrvZ7PrnL"
+    },
+    {
+      "table": "Incidents & Issues",
+      "fields": 20,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbleEi1rCVxF7Suea"
+    },
+    {
+      "table": "Tasks",
+      "fields": 17,
+      "records": 30,
+      "source_base": "Ovation OS",
+      "table_id": "tblRbyoznd2CGUhYF"
+    },
+    {
+      "table": "SOP Library",
+      "fields": 19,
+      "records": 13,
+      "source_base": "Ovation OS",
+      "table_id": "tblbnDjKHaazwXpTC"
+    },
+    {
+      "table": "Automation Control Centre",
+      "fields": 33,
+      "records": 22,
+      "source_base": "Ovation OS",
+      "table_id": "tblkBhusxIPPTufev"
+    },
+    {
+      "table": "IP Sourcing & Acquisitions",
+      "fields": 22,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbl0HcwrbK9CRDKBY"
+    },
+    {
+      "table": "Packaging Overview",
+      "fields": 19,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tbl8tUS2Ep5rEsjcs"
+    },
+    {
+      "table": "Script Coverage & Creative Reviews",
+      "fields": 22,
+      "records": 2,
+      "source_base": "Ovation OS",
+      "table_id": "tblZf6o2YKUTMLkMm"
+    },
+    {
+      "table": "Episodes & Production Units",
+      "fields": 18,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblJlzTkh3qMwKSEI"
+    },
+    {
+      "table": "Production Cost Reports",
+      "fields": 19,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblJIuNy0695hZUZM"
+    },
+    {
+      "table": "Meetings & Actions",
+      "fields": 21,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblYzuDNqYAvKJMX1"
+    },
+    {
+      "table": "Corporate Finance Monthly",
+      "fields": 21,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblo03n3VexCz73RT"
+    },
+    {
+      "table": "Territories & Markets",
+      "fields": 21,
+      "records": 20,
+      "source_base": "Ovation OS",
+      "table_id": "tblCDt33JnNl2FjUO"
+    },
+    {
+      "table": "Rights Inventory",
+      "fields": 27,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbliHogEBonnE4crD"
+    },
+    {
+      "table": "Decision Log",
+      "fields": 19,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblZ7Y1HnsachEDBA"
+    },
+    {
+      "table": "Exploitation Opportunities",
+      "fields": 19,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblRWykGrQYdig1y9"
+    },
+    {
+      "table": "Rights Revenue",
+      "fields": 19,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblsyVMB5thVLtKqT"
+    },
+    {
+      "table": "Workflow Queue",
+      "fields": 19,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tblIvD7lvfJBOBihI"
+    },
+    {
+      "table": "Post Service Projects",
+      "fields": 19,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblUvt8ahxuNBgdwb"
+    },
+    {
+      "table": "Production Services Jobs",
+      "fields": 17,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tbliqDChqZ4muAAyI"
+    },
+    {
+      "table": "Studio & Stage Bookings",
+      "fields": 16,
+      "records": 0,
+      "source_base": "Ovation OS",
+      "table_id": "tblRs0Z3AE4FQxjZy"
+    },
+    {
+      "table": "Automation Run Log",
+      "fields": 14,
+      "records": 6,
+      "source_base": "Ovation OS",
+      "table_id": "tblsGAc1AqnPdEhR9"
+    },
+    {
+      "table": "Episodes",
+      "fields": 29,
+      "records": 4,
+      "source_base": "S’appening Production",
+      "table_id": "tblrKqCF9PnjQ4bdt"
+    },
+    {
+      "table": "Cast",
+      "fields": 40,
+      "records": 48,
+      "source_base": "S’appening Production",
+      "table_id": "tblDcjVHc65OC9H16"
+    },
+    {
+      "table": "Crew",
+      "fields": 22,
+      "records": 7,
+      "source_base": "S’appening Production",
+      "table_id": "tblaDlMpofxpr93OY"
+    },
+    {
+      "table": "Scenes",
+      "fields": 34,
+      "records": 79,
+      "source_base": "S’appening Production",
+      "table_id": "tblW1sDnBQzmdFpBP"
+    },
+    {
+      "table": "Locations",
+      "fields": 28,
+      "records": 54,
+      "source_base": "S’appening Production",
+      "table_id": "tblloD53Mvy1pUEzK"
+    },
+    {
+      "table": "Props",
+      "fields": 15,
+      "records": 89,
+      "source_base": "S’appening Production",
+      "table_id": "tbl1itnh3XL8nqlJp"
+    },
+    {
+      "table": "Wardrobe",
+      "fields": 12,
+      "records": 44,
+      "source_base": "S’appening Production",
+      "table_id": "tbloG4g2iedUFqRP0"
+    },
+    {
+      "table": "Equipment",
+      "fields": 16,
+      "records": 20,
+      "source_base": "S’appening Production",
+      "table_id": "tblBDx9WK9VkX3S7L"
+    },
+    {
+      "table": "Shot List",
+      "fields": 14,
+      "records": 70,
+      "source_base": "S’appening Production",
+      "table_id": "tbldAycWzelaDgau1"
+    },
+    {
+      "table": "Shoot Days",
+      "fields": 20,
+      "records": 40,
+      "source_base": "S’appening Production",
+      "table_id": "tblsTWM2urZpWUxeR"
+    },
+    {
+      "table": "Marketing",
+      "fields": 11,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tbl9jRJK5Dd02i7HY"
+    },
+    {
+      "table": "Release Forms",
+      "fields": 10,
+      "records": 19,
+      "source_base": "S’appening Production",
+      "table_id": "tblGb5n08jJfvEXeA"
+    },
+    {
+      "table": "Expenses",
+      "fields": 13,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tbllJvZ9H9Ow6J6I6"
+    },
+    {
+      "table": "Sponsors",
+      "fields": 11,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tbl3SdVP1H29sA5eQ"
+    },
+    {
+      "table": "Partnerships",
+      "fields": 8,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tblxqpbUutLQjdr7B"
+    },
+    {
+      "table": "Contracts",
+      "fields": 13,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tblALxRmagNbPK2xI"
+    },
+    {
+      "table": "Tasks",
+      "fields": 13,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tbl26XR8j5lufCo3K"
+    },
+    {
+      "table": "Catering",
+      "fields": 10,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tbliGM5qp7GjHaKoK"
+    },
+    {
+      "table": "Transport",
+      "fields": 12,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tblnNv8gvVBGSoIVv"
+    },
+    {
+      "table": "Post Production",
+      "fields": 11,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tblugisZl5kj9LLxR"
+    },
+    {
+      "table": "Distribution",
+      "fields": 10,
+      "records": 1,
+      "source_base": "S’appening Production",
+      "table_id": "tbl61L0vljlzfGqlI"
+    },
+    {
+      "table": "Editing",
+      "fields": 34,
+      "records": 80,
+      "source_base": "S’appening Production",
+      "table_id": "tblHlxKEuO31ovAyL"
+    }
+  ]
+}

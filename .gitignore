@@ -1,0 +1,30 @@
+# No credentials, Airtable exports, private data or attachments in git
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite
+node_modules/
+.next/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.log
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+# Local object storage (dev driver) and backups
+storage/
+backups/
+# Airtable exports are PRIVATE
+04_migration_tools/private_exports/
+private_exports/
+raw_airtable_exports/
+attachments_private/
+*.secret.json
+.vercel

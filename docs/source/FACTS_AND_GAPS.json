@@ -1,0 +1,38 @@
+{
+  "audited_date": "2026-11-19",
+  "source_base_ids": [
+    "appGbXugVx1UAfw6B",
+    "appkx0tyAT1SDGSz5"
+  ],
+  "observed": {
+    "tables": 90,
+    "fields": 1835,
+    "records_count_metadata": 796,
+    "ovation_tables": 68,
+    "sappening_tables": 22,
+    "ovation_records_count_metadata": 232,
+    "sappening_records_count_metadata": 564,
+    "interfaces": 10,
+    "additional_sappening_interface_pages": 65,
+    "native_automations_sappening": 4,
+    "ovation_automation_spec_rows": 22
+  },
+  "not_provided_in_pack": [
+    "full per-field ID/type/options/formula metadata",
+    "all 796 record values",
+    "attachments/media bytes",
+    "signed documents",
+    "secrets or access tokens",
+    "screenshots of every Airtable screen",
+    "unpublished interface drafts",
+    "full automation executable code and runtime logs"
+  ],
+  "repo": {
+    "url": "https://github.com/kierantrestain/Productionos",
+    "visibility": "public",
+    "size": 0,
+    "default_branch": "main",
+    "state": "empty at inspection"
+  },
+  "data_sensitivity": "Do not commit private Airtable data to the public repository; make private and use protected storage"
+}
