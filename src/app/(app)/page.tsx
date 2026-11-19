@@ -5,17 +5,21 @@ import { homeFor } from "@/lib/nav";
 import { commandCentre } from "@/server/services/dashboard";
 import { Badge, Empty, PageHeader, Panel } from "@/components/ui";
 import { date, humanize, money } from "@/lib/format";
+import { DemoLoader } from "@/components/demo-loader";
 
 export const metadata = { title: "Command Centre" };
+export const maxDuration = 300;
 
-export default async function CommandCentrePage() {
+export default async function CommandCentrePage({ searchParams }: { searchParams: Promise<{ loadDemo?: string }> }) {
   const ctx = await requirePageContext();
   if (homeFor(ctx.role) !== "/") redirect(homeFor(ctx.role));
   const data = await commandCentre(ctx);
+  const loadDemo = (await searchParams).loadDemo === "1" && ctx.role === "org_admin";
   return (
     <>
       <PageHeader title="Command Centre" eyebrow={new Intl.DateTimeFormat("en-GB", { dateStyle: "full", timeZone: "Europe/London" }).format(new Date())}
         lede="Live position across your productions. Every figure is a database count — select it to see the records behind it." />
+      {loadDemo && <DemoLoader auto />}
       <div className="metrics" role="list" aria-label="Key metrics">
         {data.metrics.map((m) => (
           <Link key={m.key} href={m.href} className={`metric ${m.tone ?? ""}`} role="listitem" title={m.definition}>
@@ -57,7 +61,7 @@ export default async function CommandCentrePage() {
         </div>
         <div className="stack">
           <Panel title="Productions" actions={<Link className="btn btn-sm" href="/productions">All</Link>} flush>
-            {data.productions.length === 0 ? <Empty title="No productions yet" action={<Link className="btn btn-primary" href="/productions">Create a production</Link>} /> : (
+            {data.productions.length === 0 ? <Empty title="No productions yet" action={<div className="row" style={{ justifyContent: "center" }}><Link className="btn btn-primary" href="/productions/new">Create a production</Link>{ctx.role === "org_admin" && !ctx.orgIsDemo && <DemoLoader auto={false} />}</div>} /> : (
               <ul className="list">{data.productions.slice(0, 10).map((p) => (
                 <li key={p.id}><div style={{ flex: 1, minWidth: 0 }}><Link href={`/productions/${p.id}`} style={{ fontWeight: 560 }}>{p.title}</Link><div className="subtle" style={{ fontSize: 12 }}>{humanize(p.kind)}{p.isLegacyImport ? " · legacy import" : ""}</div></div><Badge value={p.status} /></li>))}
               </ul>)}

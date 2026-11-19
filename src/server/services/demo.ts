@@ -12,7 +12,7 @@ import { createEntity, updateEntity } from "@/server/entities/crud";
 import { createOrganisation, createUserWithMembership } from "@/server/services/admin";
 import { addBlock, addSceneToDay, linkScenePerson, linkSceneResource, upsertCall } from "@/server/services/production-ops";
 import { requestApproval, decideApproval } from "@/server/services/approvals";
-import { processOutbox } from "@/server/workflows/engine";
+import { drainOutbox, processOutbox } from "@/server/workflows/engine";
 
 export const DEMO_SLUG = "bang-on-demo";
 export const DEMO_DOMAIN = "demo.productionos.test";
@@ -23,7 +23,12 @@ const DOMAIN = DEMO_DOMAIN;
 export async function seedDemo(opts: { password?: string; reset?: boolean; ownerUserId?: string } = {}) {
   const [existing] = await db.select().from(organisations).where(eq(organisations.slug, SLUG));
   if (existing) {
-    if (!opts.reset) return { orgId: existing.id, created: false, password: null as string | null };
+    const complete = (existing.settings as { seedComplete?: boolean } | null)?.seedComplete === true;
+    if (complete && !opts.reset) {
+      if (opts.ownerUserId) await db.insert(memberships).values({ orgId: existing.id, userId: opts.ownerUserId, role: "org_admin" }).onConflictDoNothing();
+      return { orgId: existing.id, created: false, password: null as string | null };
+    }
+    // Incomplete (interrupted) or explicit reset: remove it and rebuild from scratch.
     await db.transaction(async (tx) => {
       await tx.execute(sql`set local app.allow_history_purge = 'on'`);
       await tx.delete(organisations).where(eq(organisations.id, existing.id));
@@ -196,7 +201,7 @@ export async function seedDemo(opts: { password?: string; reset?: boolean; owner
   await createUserWithMembership({ orgId: org.id, role: "commercial", email: `commercial@${DOMAIN}`, name: "Demo Commercial Lead", password });
   await createUserWithMembership({ orgId: org.id, role: "external_reviewer", email: `external-reviewer@${DOMAIN}`, name: "Demo Broadcaster Reviewer", password, productionIds: [quiz.id] });
   void pmUser; void gate; void updateEntity;
-  await processOutbox({ orgId: org.id, limit: 1000 });
+  await drainOutbox({ orgId: org.id, budgetMs: 60_000 });
 
   // Customisation examples (all editable under Customise / Automations).
   const { updateSettings, createFieldDef } = await import("@/server/services/customise");
@@ -206,5 +211,6 @@ export async function seedDemo(opts: { password?: string; reset?: boolean; owner
   await createFieldDef(admin, { entity: "scenes", label: "Graphics cue ID", type: "text", help: "Reference in the gallery's graphics system" });
   await createFieldDef(admin, { entity: "deliverables", label: "Broadcaster spec version", type: "select", options: ["v1", "v2", "v3"] });
   await createRule(admin, { name: "Chase rejected deliverables", entity: "deliverables", event: "updated", field: "status", value: "rejected", action: { type: "create_task", title: "Fix QC notes: {{title}}", priority: "urgent", dueInDays: 1 } });
+  await db.update(organisations).set({ settings: sql`${organisations.settings} || '{"seedComplete": true}'::jsonb` }).where(eq(organisations.id, org.id));
   return { orgId: org.id, created: true, password };
 }

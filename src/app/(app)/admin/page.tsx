@@ -5,6 +5,8 @@ import { requirePageContext } from "@/server/auth/request";
 import { listApiTokens, listInvites, listMembers } from "@/server/services/admin";
 import { DISPOSITION } from "@/server/import/disposition";
 import { AdminMembers, AdminTokens } from "@/components/admin-client";
+import { DemoLogins } from "@/components/demo-logins";
+import { DemoLoader } from "@/components/demo-loader";
 import { Badge, Forbidden, PageHeader, Panel, Tabs } from "@/components/ui";
 import { dateTime, humanize } from "@/lib/format";
 
@@ -18,7 +20,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const tabs = <Tabs tabs={[{ key: "users", label: "Users & roles" }, { key: "tokens", label: "API tokens" }, { key: "migration", label: "Migration" }, { key: "mapping", label: "90-table mapping" }]} active={tab} base="/admin" />;
   if (tab === "users") {
     const [members, invites, prods] = await Promise.all([listMembers(ctx), listInvites(ctx), db.select({ id: productions.id, title: productions.title }).from(productions).where(eq(productions.orgId, ctx.orgId))]);
-    return <>{header}{tabs}<AdminMembers me={ctx.userId} members={members.map((m) => ({ ...m, disabledAt: m.disabledAt?.toISOString() ?? null, lastLoginAt: m.lastLoginAt?.toISOString() ?? null }))} invites={invites.map((i) => ({ ...i, acceptedAt: i.acceptedAt?.toISOString() ?? null, expiresAt: i.expiresAt.toISOString(), createdAt: i.createdAt.toISOString() }))} productions={prods} /></>;
+    return <>{header}{tabs}{ctx.orgIsDemo ? <DemoLogins /> : <div className="row" style={{ marginBottom: 16 }}><span className="muted">Want sample data to explore or test roles?</span><DemoLoader auto={false} /></div>}<AdminMembers me={ctx.userId} members={members.map((m) => ({ ...m, disabledAt: m.disabledAt?.toISOString() ?? null, lastLoginAt: m.lastLoginAt?.toISOString() ?? null }))} invites={invites.map((i) => ({ ...i, acceptedAt: i.acceptedAt?.toISOString() ?? null, expiresAt: i.expiresAt.toISOString(), createdAt: i.createdAt.toISOString() }))} productions={prods} /></>;
   }
   if (tab === "tokens") {
     const tokens = await listApiTokens(ctx);

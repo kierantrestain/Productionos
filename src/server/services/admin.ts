@@ -122,9 +122,18 @@ export async function revokeApiToken(ctx: Ctx, id: string) {
 
 // ───────────── First-run setup ─────────────
 
-export async function needsSetup() {
-  const [r] = await db.select({ id: users.id }).from(users).limit(1);
-  return !r;
+/**
+ * Setup is needed when nobody exists yet, or when a previous first-run attempt never completed
+ * (no organisation marked setupComplete) AND nobody has ever signed in. The second case recovers
+ * from a setup request that was interrupted after creating the account.
+ */
+export async function needsSetup(tx: DbOrTx = db) {
+  const [anyUser] = await tx.select({ id: users.id }).from(users).limit(1);
+  if (!anyUser) return true;
+  const [done] = await tx.select({ id: organisations.id }).from(organisations).where(sql`(${organisations.settings} ->> 'setupComplete') = 'true'`).limit(1);
+  if (done) return false;
+  const [signedIn] = await tx.select({ id: users.id }).from(users).where(sql`${users.lastLoginAt} is not null`).limit(1);
+  return !signedIn;
 }
 
 /** Creates the first organisation and its admin. Refuses once any user exists (race-safe via advisory lock). */
@@ -134,11 +143,18 @@ export async function firstRunSetup(input: { orgName: string; name: string; emai
   const orgName = input.orgName.trim() || "My Production Company";
   return db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('first-run-setup'))`);
-    const [any] = await tx.select({ id: users.id }).from(users).limit(1);
-    if (any) throw forbidden("Setup has already been completed. Sign in instead.");
+    if (!(await needsSetup(tx))) throw forbidden("Setup has already been completed. Sign in instead.");
+    // Recover from an interrupted first run: remove the never-used partial install, then start clean.
+    const [stale] = await tx.select({ id: users.id }).from(users).limit(1);
+    if (stale) {
+      await tx.execute(sql`set local app.allow_history_purge = 'on'`);
+      await tx.delete(organisations);
+      await tx.delete(users);
+    }
     const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "org";
     const org = await createOrganisation({ name: orgName, slug: `${slug}-${newToken().slice(0, 6).toLowerCase()}` }, tx);
     const u = await createUserWithMembership({ orgId: org.id, email: input.email, name: input.name.trim() || "Admin", password: input.password, role: "org_admin" }, tx);
+    await tx.update(organisations).set({ settings: { setupComplete: true } as never }).where(eq(organisations.id, org.id));
     return { orgId: org.id, userId: u.id };
   });
 }
@@ -146,4 +162,31 @@ export async function firstRunSetup(input: { orgName: string; name: string; emai
 export async function myOrganisations(userId: string) {
   return db.select({ id: organisations.id, name: organisations.name, isDemo: organisations.isDemo, role: memberships.role })
     .from(memberships).innerJoin(organisations, eq(organisations.id, memberships.orgId)).where(eq(memberships.userId, userId)).orderBy(asc(organisations.name));
+}
+
+// ───────────── Demo role logins (developer testing) ─────────────
+
+/**
+ * Generate a fresh shared password for the demo workspace's role accounts and return it once.
+ * Only allowed in an is_demo organisation, and only for accounts whose memberships are ALL in
+ * demo organisations — real users can never be reset through this path.
+ */
+export async function resetDemoRoleLogins(ctx: Ctx) {
+  requireAdmin(ctx);
+  const [org] = await db.select().from(organisations).where(eq(organisations.id, ctx.orgId)).limit(1);
+  if (!org?.isDemo) throw forbidden("Role test logins are only available in the demo workspace.");
+  const members = await db.select({ userId: users.id, email: users.email, name: users.name, role: memberships.role }).from(memberships)
+    .innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, ctx.orgId)).orderBy(asc(memberships.role));
+  const candidates = members.filter((m) => m.userId !== ctx.userId && m.email.endsWith("@demo.productionos.test"));
+  const safe: typeof candidates = [];
+  for (const m of candidates) {
+    const all = await db.select({ isDemo: organisations.isDemo }).from(memberships).innerJoin(organisations, eq(organisations.id, memberships.orgId)).where(eq(memberships.userId, m.userId));
+    if (all.every((o) => o.isDemo)) safe.push(m);
+  }
+  const password = `demo-${newToken().slice(0, 14)}`;
+  const hash = await hashPassword(password);
+  for (const m of safe) await db.update(users).set({ passwordHash: hash, disabledAt: null }).where(eq(users.id, m.userId));
+  await revokeUserSessions(safe.map((m) => m.userId));
+  await audit(db, ctx, "reset_demo_role_logins", "organisations", ctx.orgId, { meta: { accounts: safe.length } });
+  return { password, accounts: safe.map((m) => ({ email: m.email, name: m.name, role: m.role })) };
 }

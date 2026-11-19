@@ -63,16 +63,13 @@ export async function acceptInviteAction(_prev: unknown, form: FormData): Promis
 export async function setupAction(_prev: unknown, form: FormData): Promise<{ error?: string }> {
   try {
     const r = await admin.firstRunSetup({ orgName: String(form.get("orgName") ?? ""), name: String(form.get("name") ?? ""), email: String(form.get("email") ?? ""), password: String(form.get("password") ?? "") });
-    if (form.get("demo") === "on") {
-      const { seedDemo } = await import("@/server/services/demo");
-      await seedDemo({ ownerUserId: r.userId });
-    }
+    // Sign in straight away; the optional demo workspace loads afterwards as its own request.
     const token = await createSession(r.userId, r.orgId);
     (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_TTL_MS / 1000 });
   } catch (e) {
     return { error: (e as Error).message };
   }
-  redirect("/");
+  redirect(form.get("demo") === "on" ? "/?loadDemo=1" : "/");
 }
 
 export async function switchOrgAction(orgId: string) {
@@ -332,4 +329,22 @@ export async function createRuleAction(input: Record<string, unknown>) {
 }
 export async function setRuleStatusAction(id: string, status: "active" | "paused" | "archived") {
   return toResult(async () => { const { setRuleStatus } = await import("@/server/workflows/rules"); await setRuleStatus(await requireContext(), id, status); done(); });
+}
+
+// ───────────── Demo workspace ─────────────
+
+/** Build (or finish building) the flagged demo workspace for the signed-in admin. Safe to call again. */
+export async function loadDemoAction() {
+  return toResult(async () => {
+    const ctx = await requireContext();
+    if (ctx.role !== "org_admin") throw new Error("Only organisation admins can load the demo workspace.");
+    const { seedDemo } = await import("@/server/services/demo");
+    const r = await seedDemo({ ownerUserId: ctx.userId });
+    done();
+    return { orgId: r.orgId, created: r.created };
+  });
+}
+
+export async function resetDemoLoginsAction() {
+  return toResult(async () => admin.resetDemoRoleLogins(await requireContext()));
 }
