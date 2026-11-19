@@ -42,6 +42,7 @@ export const organisations = pgTable("organisations", {
   timezone: text("timezone").notNull().default("Europe/London"),
   currency: text("currency").notNull().default("GBP"),
   isDemo: boolean("is_demo").notNull().default(false),
+  settings: jsonb("settings").$type<OrgSettings>().notNull().default({}),
   createdAt: ts("created_at").notNull().defaultNow(),
 });
 
@@ -442,6 +443,8 @@ export const productions = pgTable("productions", {
   baseLocation: text("base_location"),
   description: text("description"),
   isLegacyImport: boolean("is_legacy_import").notNull().default(false),
+  /** Production-level terminology and template provenance, e.g. { terms: { item: "Round", items: "Running order" }, template: "gameshow" }. */
+  settings: jsonb("settings").$type<{ terms?: { unit?: string; units?: string; item?: string; items?: string }; template?: string }>().notNull().default({}),
 });
 
 export const productionMembers = pgTable("production_members", {
@@ -1128,4 +1131,54 @@ export const fileBlobs = pgTable("file_blobs", {
   bytes: bytea("bytes").notNull(),
   contentType: text("content_type").notNull(),
   createdAt: ts("created_at").notNull().defaultNow(),
+});
+
+// ───────────── Customisation ─────────────
+
+export interface OrgSettings {
+  currency?: string;
+  timezone?: string;
+  defaultVatBp?: number;
+  /** Gross spend limits (minor units): below pmLimit → PM, below producerLimit → producer, else executive. */
+  approval?: { pmLimitMinor?: number; producerLimitMinor?: number };
+  callSheetContactPolicy?: string;
+  /** Rename entities in the UI, e.g. { scenes: { label: "Item", plural: "Items" } }. */
+  terminology?: Record<string, { label?: string; plural?: string }>;
+  /** Extra options for extensible select fields, keyed "entity.field". */
+  options?: Record<string, string[]>;
+  departments?: string[];
+}
+
+/** Per-organisation user-defined fields on any registered entity. */
+export const customFieldDefs = pgTable("custom_field_defs", {
+  ...common(),
+  entity: text("entity").notNull(),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  type: text("type").notNull(), // text | textarea | number | money | date | bool | select | url
+  options: jsonb("options").$type<string[]>().notNull().default([]),
+  required: boolean("required").notNull().default(false),
+  showInList: boolean("show_in_list").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  help: text("help"),
+}, (t) => [uniqueIndex("custom_field_key").on(t.orgId, t.entity, t.key)]);
+
+export const customFieldValues = pgTable("custom_field_values", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  entity: text("entity").notNull(),
+  recordId: uuid("record_id").notNull(),
+  fieldId: uuid("field_id").notNull().references(() => customFieldDefs.id, { onDelete: "cascade" }),
+  value: jsonb("value"),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+}, (t) => [uniqueIndex("custom_value_unique").on(t.recordId, t.fieldId), index("custom_value_entity").on(t.orgId, t.entity, t.recordId)]);
+
+/** Reusable production blueprints (built-in catalogue is in code; these are org-saved). */
+export const productionTemplates = pgTable("production_templates", {
+  ...common(),
+  name: text("name").notNull(),
+  description: text("description"),
+  baseKind: text("base_kind").notNull(),
+  blueprint: jsonb("blueprint").notNull(),
 });

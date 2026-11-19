@@ -198,5 +198,13 @@ export async function seedDemo(opts: { password?: string; reset?: boolean; owner
   void pmUser; void gate; void updateEntity;
   await processOutbox({ orgId: org.id, limit: 1000 });
 
+  // Customisation examples (all editable under Customise / Automations).
+  const { updateSettings, createFieldDef } = await import("@/server/services/customise");
+  const { createRule } = await import("@/server/workflows/rules");
+  await updateSettings(admin, { options: { "scenes.kind": ["Challenge", "Audience interaction"] }, departments: ["Production", "Camera", "Sound", "Graphics", "Post", "Talent"] });
+  admin.settings = { ...admin.settings, options: { "scenes.kind": ["challenge", "audience_interaction"] } };
+  await createFieldDef(admin, { entity: "scenes", label: "Graphics cue ID", type: "text", help: "Reference in the gallery's graphics system" });
+  await createFieldDef(admin, { entity: "deliverables", label: "Broadcaster spec version", type: "select", options: ["v1", "v2", "v3"] });
+  await createRule(admin, { name: "Chase rejected deliverables", entity: "deliverables", event: "updated", field: "status", value: "rejected", action: { type: "create_task", title: "Fix QC notes: {{title}}", priority: "urgent", dueInDays: 1 } });
   return { orgId: org.id, created: true, password };
 }

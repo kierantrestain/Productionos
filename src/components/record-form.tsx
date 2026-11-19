@@ -3,16 +3,19 @@ import { useState } from "react";
 import { getEntity } from "@/lib/entities";
 import { createRecord, updateRecord } from "@/app/actions";
 import { FieldInput, finalise, invalidateRefCache, useRun } from "./client";
+import { customAsField, useEntityConfig } from "./org-config";
 
 /**
  * Generated create/edit form. Fixed values (e.g. productionId from context) are applied and hidden.
  * Read-only/system fields are never sent — the server rejects them anyway.
  */
-export function RecordForm({ entity, initial, fixed = {}, onDone, redacted = [], canWrite = true, submitLabel, id }: {
+export function RecordForm({ entity, initial, fixed = {}, onDone, redacted = [], canWrite = true, submitLabel, id, customInitial = {} }: {
   entity: string; initial?: Record<string, unknown> & { id?: string; version?: number }; fixed?: Record<string, unknown>; onDone?: (row: Record<string, unknown>) => void;
-  redacted?: string[]; canWrite?: boolean; submitLabel?: string; id?: string;
+  redacted?: string[]; canWrite?: boolean; submitLabel?: string; id?: string; customInitial?: Record<string, unknown>;
 }) {
-  const d = getEntity(entity)!;
+  const cfg = useEntityConfig(entity);
+  const d = { ...getEntity(entity)!, fields: cfg.fields, label: cfg.labels.label };
+  const [cvals, setCvals] = useState<Record<string, unknown>>(() => ({ ...customInitial }));
   const { run, pending } = useRun();
   const editing = !!initial?.id;
   const [vals, setVals] = useState<Record<string, unknown>>(() => ({ ...(initial ?? {}), ...fixed }));
@@ -31,7 +34,15 @@ export function RecordForm({ entity, initial, fixed = {}, onDone, redacted = [],
       payload[f.key] = v;
     }
     setErrors({});
-    const res = editing ? await updateRecord(entity, initial!.id!, payload, initial!.version) : await createRecord(entity, payload);
+    const custom: Record<string, unknown> = {};
+    for (const c of cfg.custom) {
+      const f = customAsField(c);
+      const v = finalise(f, cvals[c.key]);
+      if (editing && JSON.stringify(v ?? null) === JSON.stringify(customInitial[c.key] ?? null)) continue;
+      if (!editing && (v === undefined || v === null || v === "") && !c.required) continue;
+      custom[c.key] = v ?? null;
+    }
+    const res = editing ? await updateRecord(entity, initial!.id!, payload, initial!.version, custom) : await createRecord(entity, payload, custom);
     if (!res.ok) {
       if (res.details && typeof res.details === "object") setErrors(res.details as Record<string, string>);
       await run(Promise.resolve(res));
@@ -64,6 +75,18 @@ export function RecordForm({ entity, initial, fixed = {}, onDone, redacted = [],
             </div>
           ))}
         </div>
+        {cfg.custom.length > 0 && <>
+          <h3 style={{ margin: "18px 0 8px", fontSize: 12, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--text-3)" }}>Custom fields</h3>
+          <div className="form-grid">
+            {cfg.custom.map((c) => { const f = customAsField(c); return (
+              <div key={c.key} className={`field ${f.type === "textarea" ? "wide" : ""}`}>
+                {f.type === "bool" ? <label className="check"><FieldInput f={f} value={cvals[c.key]} onChange={(v) => setCvals((s) => ({ ...s, [c.key]: v }))} id={`cf-${entity}-${c.key}`} /> {c.label}</label>
+                  : <><label htmlFor={`cf-${entity}-${c.key}`}>{c.label}{c.required && <span aria-hidden> *</span>}</label><FieldInput f={f} value={cvals[c.key]} onChange={(v) => setCvals((s) => ({ ...s, [c.key]: v }))} id={`cf-${entity}-${c.key}`} /></>}
+                {errors[`cf.${c.key}`] && <span className="err" role="alert">{errors[`cf.${c.key}`]}</span>}
+                {c.help && !errors[`cf.${c.key}`] && <span className="help">{c.help}</span>}
+              </div>); })}
+          </div>
+        </>}
         {redacted.length > 0 && <p className="subtle" style={{ marginTop: 12, fontSize: 12 }}>Some restricted fields are hidden for your role.</p>}
         {canWrite && !id && <div className="row" style={{ marginTop: 16 }}><button className="btn btn-primary" type="submit" disabled={pending}>{pending ? "Saving…" : submitLabel ?? (editing ? "Save changes" : `Create ${d.label.toLowerCase()}`)}</button></div>}
       </fieldset>

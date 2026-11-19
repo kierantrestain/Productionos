@@ -7,7 +7,7 @@ import {
   attachments, contracts, deliverables, editVersions, engagements, outboundMessages, people, productions, rightsEntries,
 } from "@/db/schema";
 import type { Ctx } from "../auth/context";
-import { audit, emit } from "../audit";
+import { audit, emit, emitChanged } from "../audit";
 import { productionAllowed } from "../entities/crud";
 import { blocked, forbidden, invalid, notFound } from "../errors";
 import { mailStatus, signingStatus } from "../integrations/providers";
@@ -25,6 +25,7 @@ export async function decideEditVersion(ctx: Ctx, editVersionId: string, decisio
     if (!v || !productionAllowed(ctx, v.productionId)) throw notFound();
     const [row] = await tx.update(editVersions).set({ status: decision, approvedBy: decision === "approved" ? ctx.userId : null, approvedAt: decision === "approved" ? new Date() : null, updatedAt: new Date(), version: sql`${editVersions.version} + 1` }).where(eq(editVersions.id, v.id)).returning();
     await audit(tx, ctx, `edit_${decision}`, "edit_versions", v.id, { productionId: v.productionId, before: v, after: row });
+    await emitChanged(tx, ctx, "edit_versions", row, ["status"]);
     return row;
   });
 }
@@ -55,6 +56,7 @@ export async function advanceDeliverable(ctx: Ctx, id: string, to: string) {
     if (!DELIVERABLE_FLOW[d.status]?.includes(to)) throw invalid(`Cannot move a deliverable from ${d.status} to ${to}.`);
     const [row] = await tx.update(deliverables).set({ status: to, updatedAt: new Date(), version: sql`${deliverables.version} + 1` }).where(eq(deliverables.id, id)).returning();
     await audit(tx, ctx, "deliverable_status", "deliverables", id, { productionId: d.productionId, before: d, after: row });
+    await emitChanged(tx, ctx, "deliverables", row, ["status"]);
     return row;
   });
 }
@@ -72,6 +74,7 @@ export async function approveDeliverable(ctx: Ctx, id: string, decision: "approv
   return db.transaction(async (tx) => {
     const [row] = await tx.update(deliverables).set({ status: decision, approvedBy: decision === "approved" ? ctx.userId : null, approvedAt: decision === "approved" ? new Date() : null, notes: note ? `${d.notes ? d.notes + "\n" : ""}${decision}: ${note}` : d.notes, updatedAt: new Date(), version: sql`${deliverables.version} + 1` }).where(eq(deliverables.id, id)).returning();
     await audit(tx, ctx, `deliverable_${decision}`, "deliverables", id, { productionId: d.productionId, before: d, after: row, meta: { note } });
+    await emitChanged(tx, ctx, "deliverables", row, ["status"]);
     await emit(tx, { orgId: ctx.orgId, type: `deliverable.${decision}`, entityType: "deliverables", entityId: id, productionId: d.productionId, idempotencyKey: `deliverable.${decision}:${id}:v${row.version}`, actorUserId: ctx.userId });
     return row;
   });
@@ -85,6 +88,7 @@ export async function markDelivered(ctx: Ctx, id: string) {
     if (d.status !== "approved") throw invalid("Only approved deliverables can be marked delivered.");
     const [row] = await tx.update(deliverables).set({ status: "delivered", deliveredAt: new Date(), updatedAt: new Date(), version: sql`${deliverables.version} + 1` }).where(eq(deliverables.id, id)).returning();
     await audit(tx, ctx, "deliverable_delivered", "deliverables", id, { productionId: d.productionId, before: d, after: row });
+    await emitChanged(tx, ctx, "deliverables", row, ["status"]);
     return row;
   });
 }
@@ -101,6 +105,7 @@ export async function generateContract(ctx: Ctx, contractId: string) {
     const [row] = await tx.update(contracts).set({ status: "generated", updatedAt: new Date(), version: sql`${contracts.version} + 1` }).where(eq(contracts.id, c.id)).returning();
     if (c.engagementId) await tx.update(engagements).set({ contractStatus: "generated", updatedAt: new Date() }).where(eq(engagements.id, c.engagementId));
     await audit(tx, ctx, "contract_generated", "contracts", c.id, { productionId: c.productionId, before: c, after: row });
+    await emitChanged(tx, ctx, "contracts", row, ["status"]);
     return row;
   });
 }
@@ -121,6 +126,7 @@ export async function requestContractSignature(ctx: Ctx, contractId: string, con
       const [row] = await tx.update(contracts).set({ status: "blocked", notes: `${c.notes ? c.notes + "\n" : ""}Signature request blocked: ${s.reason}`, updatedAt: new Date() }).where(eq(contracts.id, c.id)).returning();
       if (c.engagementId) await tx.update(engagements).set({ contractStatus: "blocked" }).where(eq(engagements.id, c.engagementId));
       await audit(tx, ctx, "contract_send_blocked", "contracts", c.id, { productionId: c.productionId, meta: { reason: s.reason } });
+      await emitChanged(tx, ctx, "contracts", row, ["status"], "blocked");
       return { status: "blocked" as const, reason: s.reason, contract: row };
     }
     await emit(tx, { orgId: ctx.orgId, type: "contract.send_requested", entityType: "contracts", entityId: c.id, productionId: c.productionId, idempotencyKey: `contract.send:${c.id}:v${c.version}`, actorUserId: ctx.userId, payload: { contractId: c.id } });
@@ -141,6 +147,7 @@ export async function markContractSigned(ctx: Ctx, contractId: string, evidenceA
     const [row] = await tx.update(contracts).set({ status: "signed", signedAt: new Date(), signatureEvidenceAttachmentId: a.id, updatedAt: new Date(), version: sql`${contracts.version} + 1` }).where(eq(contracts.id, c.id)).returning();
     if (c.engagementId) await tx.update(engagements).set({ contractStatus: "signed", updatedAt: new Date() }).where(eq(engagements.id, c.engagementId));
     await audit(tx, ctx, "contract_signed", "contracts", c.id, { productionId: c.productionId, before: c, after: row, meta: { evidence: a.id, sha256: a.sha256 } });
+    await emitChanged(tx, ctx, "contracts", row, ["status"]);
     return row;
   });
 }

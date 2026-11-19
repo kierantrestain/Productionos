@@ -6,9 +6,11 @@ import type { NavItem } from "@/lib/nav";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
 import { logoutAction, switchOrgAction } from "@/app/actions";
 import { Drawer, ToastProvider } from "./client";
+import { OrgConfigProvider } from "./org-config";
+import type { CustomFieldDefShape, OrgSettingsShape } from "@/lib/customise";
 import { Icon } from "./icons";
 
-export function Shell({ nav, user, children, orgs = [], orgId }: { nav: NavItem[]; user: { name: string; role: Role; orgName: string; isDemo: boolean }; children: React.ReactNode; orgs?: { id: string; name: string; isDemo: boolean }[]; orgId?: string }) {
+export function Shell({ nav, user, children, orgs = [], orgId, config = { settings: {}, customFields: [] } }: { nav: NavItem[]; user: { name: string; role: Role; orgName: string; isDemo: boolean }; children: React.ReactNode; orgs?: { id: string; name: string; isDemo: boolean }[]; orgId?: string; config?: { settings: OrgSettingsShape; customFields: CustomFieldDefShape[] } }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -22,6 +24,7 @@ export function Shell({ nav, user, children, orgs = [], orgId }: { nav: NavItem[
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/"));
   return (
     <ToastProvider>
+      <OrgConfigProvider value={config}>
       <a href="#main" className="sr-only">Skip to content</a>
       <div className="shell" data-nav-open={open}>
         <aside className="sidebar" aria-label="Primary">
@@ -58,6 +61,7 @@ export function Shell({ nav, user, children, orgs = [], orgId }: { nav: NavItem[
         </div>
       </div>
       <CommandPalette open={palette} onClose={() => setPalette(false)} nav={nav} />
+      </OrgConfigProvider>
     </ToastProvider>
   );
 }

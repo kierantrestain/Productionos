@@ -89,20 +89,25 @@ export async function switchOrgAction(orgId: string) {
 
 // ───────────── Generic records ─────────────
 
-export async function createRecord(entity: string, values: Record<string, unknown>): Promise<ActionResult<crud.Row>> {
+export async function createRecord(entity: string, values: Record<string, unknown>, custom?: Record<string, unknown>): Promise<ActionResult<crud.Row>> {
   return toResult(async () => {
     const ctx = await requireContext();
-    const r = await crud.createEntity(ctx, entity, values);
+    const { listFieldDefs, setCustomValues } = await import("@/server/services/customise");
+    const hasDefs = (await listFieldDefs(ctx, entity)).length > 0;
+    const r = hasDefs
+      ? await db.transaction(async (tx) => { const row = await crud.createEntity(ctx, entity, values, { tx }); await setCustomValues(ctx, entity, row.id, custom ?? {}, { tx, creating: true }); return row; })
+      : await crud.createEntity(ctx, entity, values);
     await kickOutbox(ctx.orgId);
     done();
     return r;
   });
 }
 
-export async function updateRecord(entity: string, id: string, patch: Record<string, unknown>, version?: number): Promise<ActionResult<crud.Row>> {
+export async function updateRecord(entity: string, id: string, patch: Record<string, unknown>, version?: number, custom?: Record<string, unknown>): Promise<ActionResult<crud.Row>> {
   return toResult(async () => {
     const ctx = await requireContext();
-    const r = await crud.updateEntity(ctx, entity, id, patch, version);
+    const r = Object.keys(patch).length || !custom ? await crud.updateEntity(ctx, entity, id, patch, version) : await crud.getEntityRow(ctx, entity, id);
+    if (custom && Object.keys(custom).length) { const { setCustomValues } = await import("@/server/services/customise"); await setCustomValues(ctx, entity, id, custom); }
     await kickOutbox(ctx.orgId);
     done();
     return r;
@@ -288,4 +293,43 @@ export async function createTokenAction(name: string, scopes: string[]) {
 }
 export async function revokeTokenAction(id: string) {
   return toResult(async () => { await admin.revokeApiToken(await requireContext(), id); done(); });
+}
+
+// ───────────── Customisation ─────────────
+
+export async function updateSettingsAction(patch: Record<string, unknown>) {
+  return toResult(async () => { const { updateSettings } = await import("@/server/services/customise"); const r = await updateSettings(await requireContext(), patch); done(); return r; });
+}
+export async function createFieldDefAction(input: Record<string, unknown>) {
+  return toResult(async () => { const { createFieldDef } = await import("@/server/services/customise"); const r = await createFieldDef(await requireContext(), input); done(); return { id: r.id }; });
+}
+export async function updateFieldDefAction(id: string, patch: { label?: string; options?: string[]; required?: boolean; showInList?: boolean; help?: string | null }) {
+  return toResult(async () => { const { updateFieldDef } = await import("@/server/services/customise"); await updateFieldDef(await requireContext(), id, patch); done(); });
+}
+export async function archiveFieldDefAction(id: string) {
+  return toResult(async () => { const { archiveFieldDef } = await import("@/server/services/customise"); await archiveFieldDef(await requireContext(), id); done(); });
+}
+export async function setCustomValueAction(entity: string, recordId: string, key: string, value: unknown) {
+  return toResult(async () => { const { setCustomValues } = await import("@/server/services/customise"); const ctx = await requireContext(); await setCustomValues(ctx, entity, recordId, { [key]: value }); done(); });
+}
+
+// ───────────── Templates ─────────────
+
+export async function createFromTemplateAction(input: Record<string, unknown>) {
+  return toResult(async () => { const { createFromTemplate } = await import("@/server/services/templates"); const r = await createFromTemplate(await requireContext(), input); done(); return r; });
+}
+export async function saveAsTemplateAction(productionId: string, name: string, description?: string) {
+  return toResult(async () => { const { saveAsTemplate } = await import("@/server/services/templates"); const r = await saveAsTemplate(await requireContext(), productionId, name, description); done(); return { id: r.id }; });
+}
+export async function archiveTemplateAction(id: string) {
+  return toResult(async () => { const { archiveTemplate } = await import("@/server/services/templates"); await archiveTemplate(await requireContext(), id); done(); });
+}
+
+// ───────────── Custom automation rules ─────────────
+
+export async function createRuleAction(input: Record<string, unknown>) {
+  return toResult(async () => { const { createRule } = await import("@/server/workflows/rules"); const r = await createRule(await requireContext(), input); done(); return { id: r.id }; });
+}
+export async function setRuleStatusAction(id: string, status: "active" | "paused" | "archived") {
+  return toResult(async () => { const { setRuleStatus } = await import("@/server/workflows/rules"); await setRuleStatus(await requireContext(), id, status); done(); });
 }

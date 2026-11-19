@@ -4,7 +4,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getEntity, type FieldDef } from "@/lib/entities";
 import { date, dateTime, humanize, money, pct, time, tone } from "@/lib/format";
-import { archiveRecords, batchUpdateRecords, deleteViewAction, saveViewAction, updateRecord } from "@/app/actions";
+import { archiveRecords, batchUpdateRecords, deleteViewAction, saveViewAction, setCustomValueAction, updateRecord } from "@/app/actions";
+import { customAsField, useEntityConfig } from "./org-config";
+import type { CustomFieldDefShape } from "@/lib/customise";
 import { Drawer, FieldInput, finalise, useRun, useToast } from "./client";
 import { RecordForm } from "./record-form";
 import { Icon } from "./icons";
@@ -28,12 +30,14 @@ function display(f: FieldDef, v: unknown, refs: Record<string, Record<string, st
   }
 }
 
-export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed = {}, columns, savedViews = [], redacted = [], title, hideCreate, emptyHint, recordBase }: {
+export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed = {}, columns, savedViews = [], redacted = [], title, hideCreate, emptyHint, recordBase, customValues = {} }: {
   entity: string; rows: TableRow[]; refs: Record<string, Record<string, string>>; total: number; state: TableState; canWrite: boolean;
   fixed?: Record<string, string>; columns?: string[]; savedViews?: { id: string; name: string; config: Record<string, unknown>; mine: boolean }[];
-  redacted?: string[]; title?: string; hideCreate?: boolean; emptyHint?: string; recordBase?: string;
+  redacted?: string[]; title?: string; hideCreate?: boolean; emptyHint?: string; recordBase?: string; customValues?: Record<string, Record<string, unknown>>;
 }) {
-  const d = getEntity(entity)!;
+  const cfg = useEntityConfig(entity);
+  const d = useMemo(() => ({ ...getEntity(entity)!, fields: cfg.fields, label: cfg.labels.label, plural: cfg.labels.plural }), [entity, cfg]);
+  const customCols = cfg.custom.filter((c) => c.showInList);
   const router = useRouter();
   const pathname = usePathname();
   const sp = useSearchParams();
@@ -115,6 +119,12 @@ export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed 
             {f.options!.map((o) => <option key={o} value={o}>{humanize(o)}</option>)}
           </select>
         ))}
+        {cfg.custom.filter((c) => c.type === "select" || c.type === "bool").map((c) => (
+          <select key={c.key} className="select" style={{ width: "auto" }} aria-label={`Filter by ${c.label}`} value={state.filters[`cf.${c.key}`] ?? ""} onChange={(e) => setParams({ [`f_cf.${c.key}`]: e.target.value })}>
+            <option value="">{c.label}: all</option>
+            {(c.type === "bool" ? ["true", "false"] : c.options).map((o) => <option key={o} value={o}>{c.type === "bool" ? (o === "true" ? "Yes" : "No") : o}</option>)}
+          </select>
+        ))}
         <select className="select" style={{ width: "auto" }} aria-label="Saved views" value="" onChange={(e) => { const v = savedViews.find((x) => x.id === e.target.value); if (v) applyView(v.config); }}>
           <option value="">Views{savedViews.length ? ` (${savedViews.length})` : ""}</option>
           {savedViews.map((v) => <option key={v.id} value={v.id}>{v.name}{v.mine ? "" : " · shared"}</option>)}
@@ -148,6 +158,7 @@ export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed 
                     </th>
                   );
                 })}
+                {customCols.map((c) => <th key={`cf-${c.key}`} className={["number", "money"].includes(c.type) ? "num" : ""} title="Custom field">{c.label}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -172,6 +183,7 @@ export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed 
                       </td>
                     );
                   })}
+                  {customCols.map((c) => <CustomCell key={`cf-${c.key}`} c={c} entity={entity} row={row} value={customValues[row.id]?.[c.key]} canWrite={canWrite} />)}
                 </tr>
               ))}
             </tbody>
@@ -205,5 +217,28 @@ export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed 
         {creating && <RecordForm entity={entity} fixed={fixed} onDone={() => { setCreating(false); toast(`${d.label} saved to database`); }} />}
       </Drawer>
     </div>
+  );
+}
+
+function CustomCell({ c, entity, row, value, canWrite }: { c: CustomFieldDefShape; entity: string; row: TableRow; value: unknown; canWrite: boolean }) {
+  const router = useRouter();
+  const { run } = useRun();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<unknown>(value);
+  const f = customAsField(c);
+  const save = async (v: unknown) => {
+    setEditing(false);
+    const fv = finalise(f, v);
+    if (JSON.stringify(fv ?? null) === JSON.stringify(value ?? null)) return;
+    if (await run(setCustomValueAction(entity, row.id, c.key, fv)) !== undefined) router.refresh();
+  };
+  const shown = value === null || value === undefined || value === "" ? <span className="subtle">—</span>
+    : c.type === "money" ? money(Number(value)) : c.type === "date" ? date(String(value)) : c.type === "bool" ? (value ? "Yes" : "No")
+    : c.type === "url" ? <a href={String(value)} target="_blank" rel="noreferrer noopener">{String(value).replace(/^https?:\/\//, "").slice(0, 30)}</a> : String(value);
+  return (
+    <td className={["number", "money"].includes(c.type) ? "num" : ""}>
+      {editing ? <FieldInput f={f} value={draft} compact autoFocus onChange={(v) => { setDraft(v); if (["select", "bool", "date"].includes(c.type)) save(v); }} onBlur={() => save(draft)} onKeyDown={(e) => { if (e.key === "Enter") save(draft); if (e.key === "Escape") setEditing(false); }} />
+        : canWrite ? <button className="cell-btn" aria-label={`Edit ${c.label}`} onClick={() => { setDraft(value); setEditing(true); }}>{shown}</button> : shown}
+    </td>
   );
 }

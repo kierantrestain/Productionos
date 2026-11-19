@@ -58,3 +58,11 @@ export async function emit(tx: DbOrTx, e: EmitInput) {
     status: e.origin === "import" ? "suppressed" : "pending",
   }).onConflictDoNothing({ target: outboxEvents.idempotencyKey });
 }
+
+/** Standard change event for workflow-driven transitions, so custom rules can react to them. */
+export async function emitChanged(tx: DbOrTx, ctx: Pick<Ctx, "orgId" | "userId">, entity: string, row: { id: string; version?: number; productionId?: string | null; [k: string]: unknown }, changed: string[], salt = "") {
+  await emit(tx, {
+    orgId: ctx.orgId, type: `${entity}.updated`, entityType: entity, entityId: row.id, productionId: row.productionId ?? null,
+    idempotencyKey: `${entity}.updated:${row.id}:v${row.version ?? 0}${salt ? `:${salt}` : ""}`, actorUserId: ctx.userId, payload: { version: row.version ?? 0, changed, depth: 0, values: Object.fromEntries(changed.filter((k) => k in row).map((k) => [k, row[k]])) },
+  });
+}

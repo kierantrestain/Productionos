@@ -1,5 +1,7 @@
 import type { DbOrTx } from "@/db";
-import { productionMembers } from "@/db/schema";
+import { productionMembers, resourceCheckouts, resources } from "@/db/schema";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { invalid } from "../errors";
 import { isGlobalProductionRole } from "@/lib/permissions";
 import type { Ctx } from "../auth/context";
 import { emit } from "../audit";
@@ -13,8 +15,34 @@ export interface Hook {
 
 const filled = (v: unknown) => typeof v === "string" ? v.trim().length > 0 : v != null;
 
+const withCurrency: Hook = { async beforeCreate(_tx, ctx, v) { if (!v.currency && ctx.settings?.currency) v.currency = ctx.settings.currency; } };
+
 export const HOOKS: Record<string, Hook> = {
+  resource_checkouts: {
+    /** You can't check out more units than exist. */
+    async beforeCreate(tx, ctx, v) {
+      if (v.inAt) return;
+      const [r] = await tx.select().from(resources).where(and(eq(resources.id, v.resourceId as string), eq(resources.orgId, ctx.orgId))).limit(1);
+      if (!r) return;
+      if (["maintenance", "lost", "retired"].includes(r.status)) throw invalid(`${r.name} is ${r.status} and can't be checked out.`);
+      const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(resourceCheckouts).where(and(eq(resourceCheckouts.resourceId, r.id), isNull(resourceCheckouts.inAt), isNull(resourceCheckouts.archivedAt)));
+      if (n >= r.quantity) throw invalid(`All ${r.quantity} of ${r.name} are already checked out.`);
+    },
+    /** Keep the resource's status in step with open checkouts. */
+    async afterWrite(tx, ctx, before, after) {
+      if (before && (before.inAt ?? null) === (after.inAt ?? null)) return;
+      const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(resourceCheckouts).where(and(eq(resourceCheckouts.resourceId, after.resourceId as string), isNull(resourceCheckouts.inAt), isNull(resourceCheckouts.archivedAt)));
+      await tx.update(resources).set({ status: n > 0 ? "checked_out" : "available", updatedAt: new Date() })
+        .where(and(eq(resources.id, after.resourceId as string), eq(resources.orgId, ctx.orgId), inArray(resources.status, ["available", "booked", "checked_out"])));
+    },
+  },
+  budgets: withCurrency,
+  budget_lines: { async beforeCreate(_tx, ctx, v) { if (v.vatRateBp == null && ctx.settings?.defaultVatBp != null) v.vatRateBp = ctx.settings.defaultVatBp; } },
   productions: {
+    async beforeCreate(_tx, ctx, v) {
+      if (!v.currency && ctx.settings?.currency) v.currency = ctx.settings.currency;
+      if (!v.timezone && ctx.settings?.timezone) v.timezone = ctx.settings.timezone;
+    },
     async afterWrite(tx, ctx, before, after) {
       // Creators who are production-scoped become members so they can see what they created.
       if (!before && !isGlobalProductionRole(ctx.role)) {

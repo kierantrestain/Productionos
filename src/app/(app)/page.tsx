@@ -23,6 +23,12 @@ export default async function CommandCentrePage() {
           </Link>
         ))}
       </div>
+      {data.attention.length > 0 && (
+        <section className="panel" style={{ marginBottom: 16 }} aria-label="Needs attention">
+          <div className="panel-head"><h2>Needs attention</h2><span className="subtle">{data.attention.length}</span></div>
+          <ul className="list">{data.attention.map((a, i) => <li key={i}><span className={`badge ${a.tone === "bad" ? "tone-bad" : "tone-warn"}`}>{a.kind}</span><Link href={a.href} style={{ flex: 1 }}>{a.text}</Link></li>)}</ul>
+        </section>
+      )}
       <div className="grid-2">
         <div className="stack">
           <Panel title="Upcoming shoot days" actions={<Link className="btn btn-sm" href="/schedule">Open schedule</Link>} flush>

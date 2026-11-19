@@ -46,7 +46,7 @@ export async function contextForUser(userId: string, orgId: string): Promise<Ctx
       .where(and(eq(productionMembers.userId, userId), eq(productionMembers.orgId, orgId)));
     productionIds = pm.map((p) => p.id);
   }
-  return { userId, orgId, role, name: row.user.name, email: row.user.email, personId: row.m.personId, productionIds, orgName: row.org.name, orgIsDemo: row.org.isDemo };
+  return { userId, orgId, role, name: row.user.name, email: row.user.email, personId: row.m.personId, productionIds, orgName: row.org.name, orgIsDemo: row.org.isDemo, settings: row.org.settings ?? {} };
 }
 
 export async function contextFromToken(token: string | undefined | null): Promise<Ctx | null> {

@@ -4,6 +4,7 @@ import { canRead, canWrite } from "@/lib/permissions";
 import type { Ctx } from "@/server/auth/context";
 import { getEntityRow, redact, refLabel } from "@/server/entities/crud";
 import { activity, listAttachments, listComments } from "@/server/services/attachments";
+import { customValuesFor } from "@/server/services/customise";
 import { EntityView, type SP } from "./entity-view";
 import { RecordForm } from "./record-form";
 import { ActivityPanel, AttachmentsPanel, CommentsPanel } from "./record-panels";
@@ -15,7 +16,7 @@ export async function RecordDetail({ ctx, entity, id, eyebrow, actions, aside, b
   const d = getEntity(entity)!;
   const row = await getEntityRow(ctx, entity, id);
   const writable = canWrite(ctx.role, d.domain, d.key);
-  const [atts, comms, acts] = await Promise.all([listAttachments(ctx, entity, id), listComments(ctx, entity, id), activity(ctx, entity, id)]);
+  const [atts, comms, acts, cv] = await Promise.all([listAttachments(ctx, entity, id), listComments(ctx, entity, id), activity(ctx, entity, id), customValuesFor(ctx, entity, [id])]);
   const { redacted } = redact(ctx, d, { ...row });
   const status = (row.status ?? row.stage) as string | undefined;
   const childTabs = (d.children ?? []).filter((c) => { const cd = getEntity(c.entity); return cd && canRead(ctx.role, cd.readDomain ?? cd.domain); });
@@ -27,7 +28,7 @@ export async function RecordDetail({ ctx, entity, id, eyebrow, actions, aside, b
         <div className="stack">
           <section className="panel" aria-label="Details">
             <div className="panel-head"><h2>Details</h2><span className="subtle" style={{ fontSize: 12 }}>v{row.version} · updated {new Date(String(row.updatedAt)).toLocaleString("en-GB")}</span></div>
-            <div className="panel-body"><RecordForm entity={entity} initial={row} redacted={redacted} canWrite={writable} /></div>
+            <div className="panel-body"><RecordForm entity={entity} initial={row} redacted={redacted} canWrite={writable} customInitial={cv[id] ?? {}} /></div>
           </section>
           {below}
           {childTabs.map((c) => {

@@ -34,7 +34,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         <div className="row" style={{ marginBottom: 12 }} aria-label="Production">{prods.map((p) => <Link key={p.id} className={`badge plain ${p.id === pid ? "tone-live" : ""}`} href={`/schedule?tab=stripboard&production=${p.id}`}>{p.title}</Link>)}</div>
         <Stripboard productionId={pid} canWrite={canWrite(ctx.role, "production")}
           unscheduled={uns.map(({ s, ep }) => ({ id: s.id, number: s.number, title: s.title, estDurationMins: s.estDurationMins, episode: ep ? (ep.number != null ? `Ep ${ep.number}` : ep.title) : null }))}
-          days={days.map((d) => ({ id: d.id, date: d.date, dayNumber: d.dayNumber, unit: d.unit, status: d.status, errors: cs[d.id]?.errors ?? 0, blocks: blocks.filter((b) => b.b.shootDayId === d.id).map(({ b, s }) => ({ id: b.id, sceneId: b.sceneId, number: s?.number ?? null, title: s?.title ?? b.label ?? b.kind, start: b.startTime })) }))} />
+          days={days.map((d) => ({ id: d.id, date: d.date, dayNumber: d.dayNumber, unit: d.unit, status: d.status, errors: cs[d.id]?.errors ?? 0,
+            eighths: blocks.filter((b) => b.b.shootDayId === d.id).reduce((a, b) => a + (b.s?.pageEighths ?? 0), 0),
+            mins: blocks.filter((b) => b.b.shootDayId === d.id).reduce((a, b) => a + (b.s?.estDurationMins ?? 0), 0), blocks: blocks.filter((b) => b.b.shootDayId === d.id).map(({ b, s }) => ({ id: b.id, sceneId: b.sceneId, number: s?.number ?? null, title: s?.title ?? b.label ?? b.kind, start: b.startTime })) }))} />
       </>
     );
   }

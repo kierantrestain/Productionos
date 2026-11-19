@@ -9,6 +9,7 @@ import { audit, emit } from "../audit";
 import { conflict, forbidden, invalid, notFound } from "../errors";
 import { tableFor } from "./tables";
 import { HOOKS } from "./hooks";
+import { mergedOptions } from "@/lib/customise";
 
 export type Row = Record<string, unknown> & { id: string; version: number };
 
@@ -20,6 +21,8 @@ export interface ListOpts {
   page?: number;
   pageSize?: number;
   archived?: boolean;
+  /** Custom field equality filters (fieldId → text value). */
+  customFilters?: { fieldId: string; value: string }[];
 }
 
 export interface ListResult {
@@ -66,7 +69,7 @@ export function scopeWhere(ctx: Ctx, d: EntityDef, t: any): SQL | undefined {
   return and(...conds);
 }
 
-function fieldSchema(f: FieldDef): z.ZodTypeAny {
+function fieldSchema(f: FieldDef, options?: string[]): z.ZodTypeAny {
   const nullableStr = (max: number) => z.preprocess((v) => (typeof v === "string" ? (v.trim() === "" ? null : v.trim()) : v), z.string().max(max).nullable());
   const num = (schema: z.ZodNumber) => z.preprocess((v) => (v === "" || v === undefined ? null : typeof v === "string" ? Number(v) : v), schema.nullable());
   switch (f.type) {
@@ -81,7 +84,7 @@ function fieldSchema(f: FieldDef): z.ZodTypeAny {
     case "time": return nullableStr(8).refine((v) => v == null || /^\d{2}:\d{2}(:\d{2})?$/.test(v as string), "Time must be HH:MM");
     case "datetime": return z.preprocess((v) => (v === "" || v == null ? null : new Date(v as string)), z.date().nullable());
     case "bool": return z.preprocess((v) => (v === "true" ? true : v === "false" ? false : v), z.boolean());
-    case "select": return z.preprocess((v) => (v === "" ? null : v), z.enum(f.options as unknown as [string, ...string[]]).nullable());
+    case "select": return z.preprocess((v) => (v === "" ? null : v), z.enum((options ?? f.options) as unknown as [string, ...string[]]).nullable());
     case "ref": return z.preprocess((v) => (v === "" ? null : v), z.string().uuid().nullable());
   }
 }
@@ -96,7 +99,7 @@ export function validatePatch(ctx: Ctx, d: EntityDef, input: Record<string, unkn
     if (!f) { errors[k] = "Unknown field"; continue; }
     if (f.system || (f.readOnly && !opts.allowReadOnly)) { errors[k] = "This field is managed by a workflow action"; continue; }
     if (f.sensitive && !canSee(ctx.role, f.sensitive)) { errors[k] = "You cannot edit this field"; continue; }
-    const r = fieldSchema(f).safeParse(v);
+    const r = fieldSchema(f, mergedOptions(ctx.settings, d.key, f)).safeParse(v);
     if (!r.success) { errors[k] = r.error.issues[0]?.message ?? "Invalid value"; continue; }
     if (f.required && (r.data === null || r.data === undefined)) { errors[k] = `${f.label} is required`; continue; }
     out[k] = r.data;
@@ -132,6 +135,13 @@ async function assertRefs(tx: DbOrTx, ctx: Ctx, d: EntityDef, values: Record<str
     const [p] = await tx.select({ id: t.id }).from(t).where(and(eq(t.id, values.productionId as string), eq(t.orgId, ctx.orgId))).limit(1);
     if (!p) throw invalid("Production not found", { productionId: "Not found" });
   }
+}
+
+/** Point-in-time values of changed, non-sensitive fields, carried on the event for rule evaluation. */
+function eventValues(d: EntityDef, row: Record<string, unknown>, keys: string[]) {
+  const out: Record<string, unknown> = {};
+  for (const k of keys) { const f = d.fields.find((x) => x.key === k); if (f && !f.sensitive) out[k] = row[k] instanceof Date ? (row[k] as Date).toISOString() : row[k]; }
+  return out;
 }
 
 export function serialise(row: Record<string, unknown>): Row {
@@ -208,6 +218,9 @@ export async function listEntity(ctx: Ctx, key: string, opts: ListOpts = {}): Pr
     else if (f.type === "ref") { if (/^[0-9a-f-]{36}$/i.test(raw)) conds.push(eq(t[k], raw)); }
     else conds.push(eq(t[k], raw));
   }
+  for (const cf of opts.customFilters ?? []) {
+    if (/^[0-9a-f-]{36}$/i.test(cf.fieldId)) conds.push(sql`exists (select 1 from custom_field_values v where v.record_id = ${t.id} and v.field_id = ${cf.fieldId} and v.value #>> '{}' = ${cf.value})`);
+  }
   if (opts.q?.trim()) {
     const term = `%${opts.q.trim().replace(/[%_\\]/g, (m) => "\\" + m)}%`;
     const searchable = d.search.filter((k) => t[k] && !fieldMap.get(k)?.sensitive);
@@ -240,7 +253,7 @@ export async function getEntityRow(ctx: Ctx, key: string, id: string, tx: DbOrTx
   return redact(ctx, d, serialise(row as Record<string, unknown>)).row;
 }
 
-export async function createEntity(ctx: Ctx, key: string, input: Record<string, unknown>, opts: { tx?: DbOrTx; allowReadOnly?: boolean; skipHooks?: boolean } = {}): Promise<Row> {
+export async function createEntity(ctx: Ctx, key: string, input: Record<string, unknown>, opts: { tx?: DbOrTx; allowReadOnly?: boolean; skipHooks?: boolean; automationDepth?: number } = {}): Promise<Row> {
   const d = def(key);
   assertWrite(ctx, d);
   const values = validatePatch(ctx, d, input, "create", opts);
@@ -254,7 +267,7 @@ export async function createEntity(ctx: Ctx, key: string, input: Record<string, 
     const [row] = await tx.insert(t).values({ ...values, orgId: ctx.orgId, createdBy: ctx.userId }).returning();
     const r = row as Row;
     await audit(tx, ctx, "create", d.key, r.id, { after: r, productionId: (r.productionId as string) ?? null });
-    await emit(tx, { orgId: ctx.orgId, type: `${d.key}.created`, entityType: d.key, entityId: r.id, productionId: (r.productionId as string) ?? null, idempotencyKey: `${d.key}.created:${r.id}`, actorUserId: ctx.userId, payload: { version: 1 } });
+    await emit(tx, { orgId: ctx.orgId, type: `${d.key}.created`, entityType: d.key, entityId: r.id, productionId: (r.productionId as string) ?? null, idempotencyKey: `${d.key}.created:${r.id}`, actorUserId: ctx.userId, origin: opts.automationDepth ? "system" : "user", payload: { version: 1, depth: opts.automationDepth ?? 0, values: eventValues(d, r, Object.keys(values)) } });
     if (hook?.afterWrite && !opts.skipHooks) await hook.afterWrite(tx, ctx, null, r);
     return r;
   };
@@ -262,7 +275,7 @@ export async function createEntity(ctx: Ctx, key: string, input: Record<string, 
   return redact(ctx, d, serialise(row)).row;
 }
 
-export async function updateEntity(ctx: Ctx, key: string, id: string, patch: Record<string, unknown>, expectedVersion?: number, opts: { tx?: DbOrTx; allowReadOnly?: boolean } = {}): Promise<Row> {
+export async function updateEntity(ctx: Ctx, key: string, id: string, patch: Record<string, unknown>, expectedVersion?: number, opts: { tx?: DbOrTx; allowReadOnly?: boolean; automationDepth?: number } = {}): Promise<Row> {
   const d = def(key);
   assertWrite(ctx, d);
   const values = validatePatch(ctx, d, patch, "update", opts);
@@ -281,7 +294,7 @@ export async function updateEntity(ctx: Ctx, key: string, id: string, patch: Rec
     const [row] = await tx.update(t).set({ ...values, updatedAt: new Date(), version: sql`${t.version} + 1` }).where(and(eq(t.id, id), eq(t.orgId, ctx.orgId))).returning();
     const r = row as Row;
     await audit(tx, ctx, "update", d.key, id, { before: ex, after: r, productionId });
-    await emit(tx, { orgId: ctx.orgId, type: `${d.key}.updated`, entityType: d.key, entityId: id, productionId, idempotencyKey: `${d.key}.updated:${id}:v${r.version}`, actorUserId: ctx.userId, payload: { version: r.version, changed: Object.keys(values) } });
+    await emit(tx, { orgId: ctx.orgId, type: `${d.key}.updated`, entityType: d.key, entityId: id, productionId, idempotencyKey: `${d.key}.updated:${id}:v${r.version}`, actorUserId: ctx.userId, origin: opts.automationDepth ? "system" : "user", payload: { version: r.version, changed: Object.keys(values), depth: opts.automationDepth ?? 0, values: eventValues(d, r, Object.keys(values)) } });
     if (hook?.afterWrite) await hook.afterWrite(tx, ctx, ex, r);
     return r;
   };

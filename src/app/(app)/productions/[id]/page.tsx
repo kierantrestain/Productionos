@@ -13,6 +13,7 @@ import { date, humanize } from "@/lib/format";
 import { canRead } from "@/lib/permissions";
 import { productionFinance } from "@/server/services/finance";
 import { money } from "@/lib/format";
+import { SaveTemplateButton } from "@/components/save-template";
 
 export default async function ProductionPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<SP> }) {
   const ctx = await requirePageContext();
@@ -21,6 +22,7 @@ export default async function ProductionPage({ params, searchParams }: { params:
   const p = await loadProduction(ctx, id).catch(() => null);
   if (!p) notFound();
   const fixed = { productionId: id };
+  const terms = { unit: "Episode", units: "Episodes", item: "Scene", items: "Scenes", ...(p.settings?.terms ?? {}) };
   const eps = await db.select().from(episodes).where(and(eq(episodes.productionId, id), isNull(episodes.archivedAt))).orderBy(asc(episodes.number));
   const episodeChips = (tab: string) => p.usesEpisodes && eps.length > 0 ? (
     <div className="row" style={{ marginBottom: 10 }} aria-label="Filter by episode">
@@ -38,11 +40,11 @@ export default async function ProductionPage({ params, searchParams }: { params:
     const next = days.find((d) => d.date >= new Date().toISOString().slice(0, 10) && d.status !== "cancelled");
     return (
       <RecordDetail bare ctx={ctx} entity="productions" id={id} eyebrow={<><Link href="/productions">Productions</Link> / {humanize(p.kind)}</>}
-        actions={<><Link className="btn" href={`/schedule?production=${id}`}>Stripboard</Link>{next && <Link className="btn btn-primary" href={`/schedule/day/${next.id}`}>Next shoot day · {date(next.date, { short: true })}</Link>}</>}
+        actions={<>{["org_admin", "producer", "executive"].includes(ctx.role) && <SaveTemplateButton productionId={id} title={p.title} />}<Link className="btn" href={`/schedule?production=${id}`}>Stripboard</Link>{next && <Link className="btn btn-primary" href={`/schedule/day/${next.id}`}>Next shoot day · {date(next.date, { short: true })}</Link>}</>}
         below={
           <div className="metrics" style={{ marginBottom: 0 }}>
-            <Link className="metric" href={`/productions/${id}?tab=episodes`}><div className="v">{p.usesEpisodes ? eps.length : "—"}</div><div className="l">{p.usesEpisodes ? "Episodes / units" : "Standalone"}</div></Link>
-            <Link className="metric" href={`/productions/${id}?tab=scenes`}><div className="v">{sc.total}</div><div className="l">Scenes & segments · {sc.shot} shot</div></Link>
+            <Link className="metric" href={`/productions/${id}?tab=episodes`}><div className="v">{p.usesEpisodes ? eps.length : "—"}</div><div className="l">{p.usesEpisodes ? terms.units : "Standalone"}</div></Link>
+            <Link className="metric" href={`/productions/${id}?tab=scenes`}><div className="v">{sc.total}</div><div className="l">{terms.items} · {sc.shot} shot</div></Link>
             <Link className="metric" href={`/productions/${id}?tab=shots`}><div className="v">{sh.total}</div><div className="l">Shots</div></Link>
             <Link className="metric" href={`/productions/${id}?tab=schedule`}><div className="v">{days.length}</div><div className="l">Shoot days</div></Link>
             {fin.map((b) => <Link key={b.budget.id} className={`metric ${b.totals.variance < 0 ? "bad" : ""}`} href={`/budgets/${b.budget.id}`}><div className="v">{money(b.totals.variance, b.budget.currency, { compact: true })}</div><div className="l">Variance · {b.budget.name}</div></Link>)}
@@ -56,8 +58,8 @@ export default async function ProductionPage({ params, searchParams }: { params:
       eyebrow={<><Link href="/productions">Productions</Link> / {humanize(p.kind)}{p.usesEpisodes ? "" : " · standalone"}</>}
       tabs={[
         { key: "overview", label: "Overview", render: overview },
-        ...(p.usesEpisodes ? [{ key: "episodes", label: "Episodes", entity: "episodes", fixed }] : []),
-        { key: "scenes", label: p.kind === "series" || p.kind === "film" ? "Scenes" : "Segments & running order", render: async () => <>{episodeChips("scenes")}<EntityView ctx={ctx} entity="scenes" sp={sp} fixed={{ ...fixed, ...(typeof sp.f_episodeId === "string" ? { episodeId: sp.f_episodeId } : {}) }} recordBase={`/productions/${id}/scenes`} /></> },
+        ...(p.usesEpisodes ? [{ key: "episodes", label: terms.units, entity: "episodes", fixed }] : []),
+        { key: "scenes", label: terms.items, render: async () => <>{episodeChips("scenes")}<EntityView ctx={ctx} entity="scenes" sp={sp} fixed={{ ...fixed, ...(typeof sp.f_episodeId === "string" ? { episodeId: sp.f_episodeId } : {}) }} recordBase={`/productions/${id}/scenes`} /></> },
         { key: "shots", label: "Shot list", entity: "shots", fixed },
         { key: "schedule", label: "Shoot days", entity: "shoot_days", fixed, recordBase: "/schedule/day" },
         { key: "people", label: "Cast & crew", entity: "engagements", fixed },

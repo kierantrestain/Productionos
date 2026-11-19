@@ -9,6 +9,8 @@ export interface WsTab { key: string; label: string; entity?: string; fixed?: Re
 
 /** A workspace = header + tabs, each tab a live entity grid or a custom panel. Tabs the role cannot read are hidden. */
 export async function Workspace({ ctx, sp, base, title, lede, tabs, actions, eyebrow }: { ctx: Ctx; sp: SP; base: string; title: ReactNode; lede?: ReactNode; tabs: WsTab[]; actions?: ReactNode; eyebrow?: ReactNode }) {
+  // Apply organisation terminology to tabs that use the registry's default plural.
+  tabs = tabs.map((t) => { const d = t.entity ? getEntity(t.entity) : undefined; const o = d && ctx.settings?.terminology?.[d.key]?.plural; return o && t.label === d!.plural ? { ...t, label: o } : t; });
   const visible = tabs.filter((t) => { if (!t.entity) return true; const d = getEntity(t.entity)!; return canRead(ctx.role, d.readDomain ?? d.domain); });
   if (!visible.length) return <><PageHeader title={title} /><div className="panel"><Forbidden /></div></>;
   const activeKey = typeof sp.tab === "string" && visible.some((t) => t.key === sp.tab) ? sp.tab : visible[0].key;

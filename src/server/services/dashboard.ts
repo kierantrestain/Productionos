@@ -4,7 +4,8 @@
  */
 import { and, asc, eq, gte, inArray, isNull, lt, lte, ne, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { deliverables, ipProjects, outboxEvents, productions, risks, shootDays, tasks, workflowRuns } from "@/db/schema";
+import { contractObligations, deliverables, ipProjects, outboxEvents, productions, resourceCheckouts, resources, rightsEntries, risks, shootDays, tasks, workflowRuns } from "@/db/schema";
+import { or } from "drizzle-orm";
 import { canRead } from "@/lib/permissions";
 import type { Ctx } from "../auth/context";
 import { conflictSummary } from "./conflicts";
@@ -79,7 +80,27 @@ export async function commandCentre(ctx: Ctx) {
   const prodRows = pids.length ? await db.select().from(productions).where(inArray(productions.id, pids)).orderBy(asc(productions.title)) : [];
   const dueDeliverables = pids.length ? await db.select({ d: deliverables, title: productions.title }).from(deliverables).innerJoin(productions, eq(productions.id, deliverables.productionId))
     .where(and(inArray(deliverables.productionId, pids), isNull(deliverables.archivedAt), ne(deliverables.status, "delivered"))).orderBy(asc(deliverables.dueDate)).limit(8) : [];
+  // Attention list: things that will hurt if nobody acts.
+  const today = iso(new Date()), in90 = iso(new Date(Date.now() + 90 * 864e5)), in14 = iso(new Date(Date.now() + 14 * 864e5));
+  const attention: { kind: string; tone: "bad" | "warn"; text: string; href: string }[] = [];
+  if (canRead(ctx.role, "legal")) {
+    const rights = await db.select().from(rightsEntries).where(and(eq(rightsEntries.orgId, ctx.orgId), isNull(rightsEntries.archivedAt),
+      or(inArray(rightsEntries.status, ["missing", "disputed", "expired"]), and(eq(rightsEntries.status, "cleared"), lte(rightsEntries.endDate, in90))))).limit(20);
+    for (const r of rights) if (!r.productionId || pids.includes(r.productionId)) attention.push({ kind: "Rights", tone: r.status === "cleared" && r.endDate! >= today ? "warn" : "bad", text: r.status === "cleared" ? `${r.title} expires ${r.endDate}` : `${r.title} is ${r.status}`, href: `/data/rights_entries/${r.id}` });
+    const obl = await db.select().from(contractObligations).where(and(eq(contractObligations.orgId, ctx.orgId), eq(contractObligations.status, "open"), lte(contractObligations.dueDate, in14), isNull(contractObligations.archivedAt))).limit(20);
+    for (const o of obl) if (!o.productionId || pids.includes(o.productionId)) attention.push({ kind: "Obligation", tone: o.dueDate! < today ? "bad" : "warn", text: `${o.description} — due ${o.dueDate}`, href: `/data/contract_obligations/${o.id}` });
+  }
+  if (canRead(ctx.role, "resources")) {
+    const late = await db.select({ c: resourceCheckouts, name: resources.name }).from(resourceCheckouts).innerJoin(resources, eq(resources.id, resourceCheckouts.resourceId))
+      .where(and(eq(resourceCheckouts.orgId, ctx.orgId), isNull(resourceCheckouts.inAt), lt(resourceCheckouts.dueAt, new Date()), isNull(resourceCheckouts.archivedAt))).limit(20);
+    for (const l of late) attention.push({ kind: "Kit", tone: "bad", text: `${l.name} overdue for return`, href: `/data/resource_checkouts/${l.c.id}` });
+  }
+  if (canRead(ctx.role, "approvals")) {
+    const mine = (await listApprovals(ctx, "pending")).filter((a) => a.canDecide);
+    if (mine.length) attention.push({ kind: "Approvals", tone: "warn", text: `${mine.length} approval${mine.length > 1 ? "s" : ""} waiting for your decision`, href: "/approvals" });
+  }
   return {
+    attention,
     metrics,
     upcoming: upcoming.map((u) => ({ id: u.d.id, date: u.d.date, unit: u.d.unit, dayNumber: u.d.dayNumber, status: u.d.status, productionId: u.d.productionId, production: u.title, conflicts: conflicts[u.d.id] ?? { errors: 0, warnings: 0 } })),
     finance: finance.map((f) => ({ ...f, production: prodRows.find((p) => p.id === f.productionId)?.title ?? "" })),

@@ -1,0 +1,1 @@
+ALTER TABLE "productions" ADD COLUMN "settings" jsonb DEFAULT '{}'::jsonb NOT NULL;

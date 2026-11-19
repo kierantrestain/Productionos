@@ -68,7 +68,7 @@ test.describe.serial("producer journey", () => {
 
     // Automation: scene name + director → exactly one auto master shot.
     await page.reload();
-    await expect(page.locator("text=auto").first()).toBeVisible();
+    await expect(page.locator("[aria-label='Shot list'] tbody .badge", { hasText: "auto" })).toHaveCount(1);
 
     const people = page.getByRole("region", { name: "Cast and crew" });
     await pickOption(page, people.locator("select").first(), "Demo Host Ava Reid");
@@ -201,4 +201,43 @@ test.describe("responsive layouts (acceptance 27)", () => {
       await p.context().close();
     });
   }
+});
+
+test.describe("customisation (wizard, custom fields, rules)", () => {
+  test("build a production from a template and use a custom field", async ({ browser }) => {
+    const admin = await login(browser, "org-admin");
+    const title = `Wizard Panel ${Date.now().toString(36)}`;
+    await admin.goto("/productions/new");
+    await admin.getByRole("button", { name: "Use template Panel / chat show" }).click();
+    await admin.fill("#w-title", title);
+    await admin.fill("#w-units", "2");
+    await expect(admin.getByRole("complementary", { name: "What will be created" })).toContainText("12");
+    await admin.click("button:has-text('Create production')");
+    await admin.waitForURL(/\/productions\/[0-9a-f-]{36}$/);
+    const scenesUrl = admin.url() + "?tab=scenes";
+    await admin.goto(scenesUrl);
+    await expect(admin.getByRole("link", { name: "Guest introductions" }).first()).toBeVisible();
+    await expect(admin.locator("table.data tbody tr")).toHaveCount(12);
+
+    // Org-defined custom field appears on the grid and can be edited inline.
+    await admin.goto("/settings?tab=fields");
+    const label = `Cue ${Date.now().toString(36)}`;
+    await admin.selectOption("#cf-entity", "scenes");
+    await admin.fill("#cf-label", label);
+    await admin.click("button:has-text('Add field')");
+    await expect(admin.getByText(label).first()).toBeVisible();
+    await admin.goto(scenesUrl);
+    await expect(admin.getByRole("columnheader", { name: label })).toBeVisible();
+    const editor = admin.getByRole("textbox", { name: label });
+    await expect(async () => {
+      await admin.getByRole("button", { name: `Edit ${label}` }).first().click();
+      await expect(editor).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 15000 });
+    await editor.fill("GFX-001");
+    await editor.press("Enter");
+    await expect(admin.getByRole("button", { name: `Edit ${label}` }).first()).toHaveText("GFX-001");
+    await admin.goto(scenesUrl);
+    await expect(admin.getByRole("button", { name: `Edit ${label}` }).first()).toHaveText("GFX-001");
+    await admin.context().close();
+  });
 });

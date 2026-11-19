@@ -19,7 +19,8 @@ export const NAV: NavItem[] = [
   { href: "/executive", label: "Governance", icon: "shield", section: "Business", domain: "org" },
   { href: "/operations", label: "Operations & tasks", icon: "ops", section: "Operate", domain: "ops" },
   { href: "/automations", label: "Automations", icon: "bolt", section: "Operate", domain: "automation" },
-  { href: "/admin", label: "Admin & migration", icon: "settings", section: "Operate", domain: "admin" },
+  { href: "/settings", label: "Customise", icon: "settings", section: "Operate", domain: "admin" },
+  { href: "/admin", label: "Admin & migration", icon: "database", section: "Operate", domain: "admin" },
 ];
 
 export function navFor(role: Role) {

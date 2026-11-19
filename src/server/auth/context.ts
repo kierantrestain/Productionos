@@ -1,4 +1,5 @@
 import type { Role } from "@/lib/permissions";
+import type { OrgSettingsShape } from "@/lib/customise";
 
 /** Authenticated request context. Every service call takes one; nothing trusts the client. */
 export interface Ctx {
@@ -12,4 +13,5 @@ export interface Ctx {
   productionIds: "all" | string[];
   orgName: string;
   orgIsDemo: boolean;
+  settings: OrgSettingsShape;
 }

@@ -7,6 +7,7 @@ import type { Ctx } from "@/server/auth/context";
 import { listEntity } from "@/server/entities/crud";
 import { EntityTable, type TableState } from "./entity-table";
 import { Forbidden } from "./ui";
+import { customValuesFor, listFieldDefs } from "@/server/services/customise";
 
 export type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -24,11 +25,15 @@ export async function EntityView({ ctx, entity, sp, fixed = {}, columns, title, 
   const d = getEntity(entity)!;
   if (!canRead(ctx.role, d.readDomain ?? d.domain)) return <div className="panel"><Forbidden what={d.plural.toLowerCase()} /></div>;
   const state = parseState(sp);
-  const res = await listEntity(ctx, entity, { q: state.q, sort: state.sort, dir: state.dir, filters: { ...state.filters, ...fixed }, archived: state.archived, page: state.page, pageSize: state.pageSize });
+  const defs = await listFieldDefs(ctx, entity);
+  const customFilters = Object.entries(state.filters).filter(([k]) => k.startsWith("cf.")).map(([k, v]) => ({ fieldId: defs.find((x) => `cf.${x.key}` === k)?.id ?? "", value: v })).filter((x) => x.fieldId);
+  const plainFilters = Object.fromEntries(Object.entries(state.filters).filter(([k]) => !k.startsWith("cf.")));
+  const res = await listEntity(ctx, entity, { q: state.q, sort: state.sort, dir: state.dir, filters: { ...plainFilters, ...fixed }, customFilters, archived: state.archived, page: state.page, pageSize: state.pageSize });
+  const customValues = defs.length ? await customValuesFor(ctx, entity, res.rows.map((r) => r.id)) : {};
   const views = await db.select().from(savedViews).where(and(eq(savedViews.orgId, ctx.orgId), eq(savedViews.entity, entity), or(eq(savedViews.userId, ctx.userId), eq(savedViews.shared, true))));
   return (
     <EntityTable entity={entity} rows={res.rows} refs={res.refs} total={res.total} state={state} canWrite={!readOnly && canWrite(ctx.role, d.domain, d.key)} fixed={fixed}
-      columns={columns} redacted={res.redacted} title={title} hideCreate={hideCreate} emptyHint={emptyHint} recordBase={recordBase}
+      columns={columns} redacted={res.redacted} customValues={customValues} title={title} hideCreate={hideCreate} emptyHint={emptyHint} recordBase={recordBase}
       savedViews={views.map((v) => ({ id: v.id, name: v.name, config: v.config as Record<string, unknown>, mine: v.userId === ctx.userId }))} />
   );
 }

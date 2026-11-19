@@ -7,7 +7,7 @@ import { addSceneToDayAction, createRecord, moveBlockAction, removeBlockAction }
 import { useRun } from "./client";
 
 type Scene = { id: string; number: string; title: string; estDurationMins: number | null; episode: string | null };
-type Day = { id: string; date: string; dayNumber: number | null; unit: string; status: string; errors: number; blocks: { id: string; sceneId: string | null; number: string | null; title: string; start: string | null }[] };
+type Day = { id: string; date: string; dayNumber: number | null; unit: string; status: string; errors: number; eighths: number; mins: number; blocks: { id: string; sceneId: string | null; number: string | null; title: string; start: string | null }[] };
 
 /** Stripboard: drag unscheduled scenes onto days, drag strips between days. Keyboard: “Add to day” selects. */
 export function Stripboard({ productionId, unscheduled, days, canWrite }: { productionId: string; unscheduled: Scene[]; days: Day[]; canWrite: boolean }) {
@@ -44,7 +44,7 @@ export function Stripboard({ productionId, unscheduled, days, canWrite }: { prod
         {days.map((d) => (
           <div key={d.id} className="lane" data-drop={over === d.id} onDragOver={(e) => { e.preventDefault(); setOver(d.id); }} onDragLeave={() => setOver(null)} onDrop={() => drop(d.id)} aria-label={`Shoot day ${d.date}`}>
             <h3><Link href={`/schedule/day/${d.id}`}>{date(d.date, { short: true, weekday: true })}{d.dayNumber ? ` · D${d.dayNumber}` : ""}</Link>{d.errors > 0 && <span className="badge tone-bad">{d.errors}</span>}</h3>
-            <div className="subtle" style={{ fontSize: 11, padding: "0 6px 6px" }}>{d.unit} · {d.status}</div>
+            <div className="subtle" style={{ fontSize: 11, padding: "0 6px 6px" }}>{d.unit} · {d.status}{d.blocks.length ? ` · ${pages(d.eighths)} pgs · ${Math.floor(d.mins / 60)}h${String(d.mins % 60).padStart(2, "0")}` : ""}</div>
             {d.blocks.map((b) => (
               <div key={b.id} className="card" draggable={canWrite && !!b.sceneId} onDragStart={() => setDrag({ type: "block", id: b.id })}>
                 <div className="row" style={{ justifyContent: "space-between", flexWrap: "nowrap" }}><strong className="mono">{b.number ?? "—"}</strong><span className="mono subtle" style={{ fontSize: 12 }}>{time(b.start)}</span></div>
@@ -65,3 +65,6 @@ export function Stripboard({ productionId, unscheduled, days, canWrite }: { prod
     </div>
   );
 }
+
+/** Script pages in industry eighths notation, e.g. 3 4/8. */
+function pages(eighths: number) { const w = Math.floor(eighths / 8), r = eighths % 8; return r ? `${w ? `${w} ` : ""}${r}/8` : String(w); }

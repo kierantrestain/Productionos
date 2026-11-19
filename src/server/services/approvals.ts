@@ -5,15 +5,18 @@ import {
 } from "@/db/schema";
 import { canDecide } from "@/lib/permissions";
 import type { Ctx } from "../auth/context";
-import { audit, emit } from "../audit";
+import { audit, emit, emitChanged } from "../audit";
 import { productionAllowed } from "../entities/crud";
 import { forbidden, invalid, notFound } from "../errors";
 import { requireRead, requireWrite } from "./guards";
+import { DEFAULT_APPROVAL } from "@/lib/customise";
 
 /** Authority thresholds (gross, pence). Documented in docs/BUSINESS_RULES.md. */
-export function requiredRoleForSpend(grossMinor: number) {
-  if (grossMinor < 100_000) return "production_manager"; // < £1,000
-  if (grossMinor < 1_000_000) return "producer"; // < £10,000
+export function requiredRoleForSpend(grossMinor: number, settings?: Ctx["settings"]) {
+  const pm = settings?.approval?.pmLimitMinor ?? DEFAULT_APPROVAL.pmLimitMinor; // default < £1,000
+  const prod = settings?.approval?.producerLimitMinor ?? DEFAULT_APPROVAL.producerLimitMinor; // default < £10,000
+  if (grossMinor < pm) return "production_manager";
+  if (grossMinor < prod) return "producer";
   return "executive";
 }
 
@@ -42,12 +45,12 @@ export async function requestApproval(ctx: Ctx, subjectType: SubjectType, subjec
     switch (subjectType) {
       case "purchase_orders":
         if (s.status !== "draft" && s.status !== "rejected") throw invalid("Only draft or rejected POs can be submitted.");
-        amountMinor = Number(s.netMinor) + Number(s.vatMinor); kind = "purchase_order"; title = `PO ${s.number}: ${s.description}`; requiredRole = requiredRoleForSpend(amountMinor);
+        amountMinor = Number(s.netMinor) + Number(s.vatMinor); kind = "purchase_order"; title = `PO ${s.number}: ${s.description}`; requiredRole = requiredRoleForSpend(amountMinor, ctx.settings);
         await tx.update(purchaseOrders).set({ status: "pending_approval", updatedAt: new Date() }).where(eq(purchaseOrders.id, s.id));
         break;
       case "expenses":
         if (!["draft", "submitted", "rejected"].includes(s.status)) throw invalid("This expense cannot be submitted.");
-        amountMinor = Number(s.netMinor) + Number(s.vatMinor); kind = "expense"; title = `Expense: ${s.description}`; requiredRole = requiredRoleForSpend(amountMinor);
+        amountMinor = Number(s.netMinor) + Number(s.vatMinor); kind = "expense"; title = `Expense: ${s.description}`; requiredRole = requiredRoleForSpend(amountMinor, ctx.settings);
         await tx.update(expenses).set({ status: "submitted", updatedAt: new Date() }).where(eq(expenses.id, s.id));
         break;
       case "budgets": {
@@ -117,6 +120,9 @@ export async function decideApproval(ctx: Ctx, approvalId: string, decision: "ap
       case "contracts": if (ok) await tx.update(contracts).set({ status: "approved", updatedAt: new Date() }).where(eq(contracts.id, req.subjectId)); break;
     }
     await audit(tx, ctx, `approval_${decision}`, req.subjectType, req.subjectId, { productionId: req.productionId, meta: { approvalRequestId: req.id, note } });
+    // Let custom rules react to the subject's status change (e.g. "when a PO is approved, create a task").
+    const newStatus: Record<string, string> = { purchase_orders: ok ? "approved" : "rejected", expenses: ok ? "approved" : "rejected", budgets: ok ? "approved" : "draft", greenlight_gates: ok ? "approved" : "rejected", contracts: ok ? "approved" : "" };
+    if (newStatus[req.subjectType]) await emitChanged(tx, ctx, req.subjectType, { id: req.subjectId, productionId: req.productionId, status: newStatus[req.subjectType] }, ["status"], `approval:${req.id}`);
     await emit(tx, { orgId: ctx.orgId, type: `approval.${decision}`, entityType: "approval_requests", entityId: req.id, productionId: req.productionId, idempotencyKey: `approval.decided:${req.id}`, actorUserId: ctx.userId });
     return { id: req.id, status: decision };
   });

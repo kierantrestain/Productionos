@@ -9,6 +9,7 @@ import { contracts, engagements, outboundMessages, outboxEvents, workflowDefinit
 import { ProviderError, requestSignature, sendMail } from "../integrations/providers";
 import { generateInitialShot } from "../services/production-ops";
 import { BUILTIN_WORKFLOWS } from "./registry";
+import { executeRule, rulesFor } from "./rules";
 
 type Event = typeof outboxEvents.$inferSelect;
 type HandlerResult = { status: "succeeded" | "skipped" | "blocked"; result?: Record<string, unknown> };
@@ -90,6 +91,18 @@ export async function processOutbox(opts: { limit?: number; orgId?: string } = {
   const stats = { claimed: claimed.length, done: 0, retried: 0, dead: 0, skipped: 0 };
   for (const { id } of claimed) {
     const [e] = await db.select().from(outboxEvents).where(eq(outboxEvents.id, id));
+    // Custom rules first (each idempotent per rule+event); failures are recorded but don't block built-in handlers.
+    for (const rule of await rulesFor(e)) {
+      const key = `${rule.key}:${e.id}`;
+      const [prev] = await db.select().from(workflowRuns).where(eq(workflowRuns.idempotencyKey, key)).limit(1);
+      if (prev && prev.status !== "failed") continue;
+      try {
+        const r = await executeRule(rule, e);
+        await recordRun(e, rule.key, rule.ruleVersion, r.status, r.result);
+      } catch (err) {
+        await recordRun(e, rule.key, rule.ruleVersion, "failed", null, String((err as Error)?.message ?? err).slice(0, 500));
+      }
+    }
     const handler = HANDLERS[e.type];
     if (!handler) {
       await db.update(outboxEvents).set({ status: "done", processedAt: new Date(), lockedUntil: null }).where(eq(outboxEvents.id, e.id));
@@ -141,7 +154,24 @@ export async function retryEvent(orgId: string, eventId: string) {
   return !!e;
 }
 
-/** Best-effort inline drain so users see automation results immediately; durable either way. */
+/**
+ * Drain due events in batches until the queue is empty or the time budget is spent.
+ * A single-batch drain lets bulk operations (e.g. building a production from a template)
+ * starve newer events, so we keep going while batches come back full.
+ */
+export async function drainOutbox(opts: { orgId?: string; budgetMs?: number; batch?: number } = {}) {
+  const started = Date.now(), batch = opts.batch ?? 100;
+  const total = { claimed: 0, done: 0, retried: 0, dead: 0, skipped: 0, batches: 0 };
+  while (Date.now() - started < (opts.budgetMs ?? 4000)) {
+    const s = await processOutbox({ limit: batch, orgId: opts.orgId });
+    total.batches++;
+    for (const k of ["claimed", "done", "retried", "dead", "skipped"] as const) total[k] += s[k];
+    if (s.claimed < batch) break;
+  }
+  return total;
+}
+
+/** Best-effort inline drain so users see automation results immediately; durable either way (cron drains the rest). */
 export async function kickOutbox(orgId: string) {
-  try { await processOutbox({ limit: 25, orgId }); } catch (e) { console.error("outbox kick failed", e); }
+  try { await drainOutbox({ orgId, budgetMs: 4000 }); } catch (e) { console.error("outbox kick failed", e); }
 }

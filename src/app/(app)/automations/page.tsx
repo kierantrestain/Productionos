@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { outboundMessages, outboxEvents, workflowDefinitions, workflowRuns } from "@/db/schema";
 import { requirePageContext } from "@/server/auth/request";
@@ -9,17 +9,25 @@ import { dateTime, humanize } from "@/lib/format";
 import { mailStatus, signingStatus } from "@/server/integrations/providers";
 import { storageStatus } from "@/server/storage";
 import { productionAllowed } from "@/server/entities/crud";
+import { listRules } from "@/server/workflows/rules";
+import { RuleBuilder } from "@/components/rule-builder";
 
 export const metadata = { title: "Automations" };
 
 export default async function AutomationsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const ctx = await requirePageContext();
   if (!canRead(ctx.role, "automation")) return <Forbidden what="automations" />;
-  const tab = (await searchParams).tab ?? "workflows";
+  const tab = (await searchParams).tab ?? "rules";
   const isAdmin = ctx.role === "org_admin";
   const mail = mailStatus(), sign = signingStatus(), store = storageStatus();
   const header = <PageHeader title="Operations, workflows & automation health" lede="Rules run from a transactional outbox with idempotency keys, retries and dead-lettering. Imported specifications stay blocked until implemented and tested." actions={<QueueControls isAdmin={isAdmin} />} />;
-  const tabs = <Tabs tabs={[{ key: "workflows", label: "Workflow registry" }, { key: "runs", label: "Run history" }, { key: "events", label: "Event queue" }, { key: "outbox", label: "Outbox review" }, { key: "integrations", label: "Integrations" }]} active={tab} base="/automations" />;
+  const tabs = <Tabs tabs={[{ key: "rules", label: "Custom rules" }, { key: "workflows", label: "Workflow registry" }, { key: "runs", label: "Run history" }, { key: "events", label: "Event queue" }, { key: "outbox", label: "Outbox review" }, { key: "integrations", label: "Integrations" }]} active={tab} base="/automations" />;
+  if (tab === "rules") {
+    const rules = await listRules(ctx);
+    const runs = await db.select().from(workflowRuns).where(eq(workflowRuns.orgId, ctx.orgId)).orderBy(desc(workflowRuns.startedAt)).limit(200);
+    const keys = Object.fromEntries((await db.select({ id: workflowDefinitions.id, key: workflowDefinitions.key }).from(workflowDefinitions).where(eq(workflowDefinitions.orgId, ctx.orgId))).map((x) => [x.id, x.key]));
+    return (<>{header}{tabs}<RuleBuilder isAdmin={isAdmin} rules={rules} ruleKeys={keys} runs={runs.map((r) => ({ workflowKey: r.workflowKey, status: r.status, at: r.startedAt.toISOString(), result: r.result }))} /></>);
+  }
   if (tab === "runs" || tab === "events") {
     const runs = tab === "runs" ? await db.select().from(workflowRuns).where(eq(workflowRuns.orgId, ctx.orgId)).orderBy(desc(workflowRuns.startedAt)).limit(200) : [];
     const events = tab === "events" ? await db.select().from(outboxEvents).where(eq(outboxEvents.orgId, ctx.orgId)).orderBy(desc(outboxEvents.occurredAt)).limit(200) : [];
@@ -48,7 +56,7 @@ export default async function AutomationsPage({ searchParams }: { searchParams: 
     ];
     return (<>{header}{tabs}<Panel flush><ul className="list">{rows.map((r) => <li key={r.name}><strong style={{ width: 260 }}>{r.name}</strong><Badge value={r.s} /><span className="muted">{r.note}</span></li>)}</ul></Panel></>);
   }
-  const defs = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.orgId, ctx.orgId))).orderBy(workflowDefinitions.source, workflowDefinitions.key);
+  const defs = await db.select().from(workflowDefinitions).where(and(eq(workflowDefinitions.orgId, ctx.orgId), ne(workflowDefinitions.source, "custom"))).orderBy(workflowDefinitions.source, workflowDefinitions.key);
   return (<>{header}{tabs}
     <Panel flush><div className="table-wrap" style={{ border: 0 }}><table className="data">
       <thead><tr><th>Key</th><th>Workflow</th><th>Source</th><th>Trigger</th><th>Status</th><th>Disposition</th><th>Evidence</th><th /></tr></thead>

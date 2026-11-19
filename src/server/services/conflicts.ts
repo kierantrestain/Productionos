@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
-  availabilityBlocks, dayCalls, engagements, locations, people, productions, releaseForms, resourceBookings,
+  availabilityBlocks, dayCalls, engagements, locationBookings, locations, people, productions, releaseForms, resourceBookings,
   resources, scenePeople, sceneResources, scenes, scheduleBlocks, shootDays,
 } from "@/db/schema";
 import type { Ctx } from "../auth/context";
@@ -145,6 +145,18 @@ export async function shootDayConflicts(ctx: Ctx, shootDayId: string): Promise<C
         // Any other unit (same or different production) using a non-shared location on this date is a clash.
         if (users.size) out.push({ type: "location_clash", severity: "error", entityType: "locations", entityId: l.id, message: `${l.name} is also in use by ${[...users].map((d) => dayLabel.get(d)).join(", ")} on ${day.date}.` });
       }
+    }
+  }
+  // Location / studio bookings held by other productions on this date.
+  if (locIds.size) {
+    const books = await db.select({ b: locationBookings, title: productions.title, loc: locations }).from(locationBookings)
+      .innerJoin(productions, eq(productions.id, locationBookings.productionId)).innerJoin(locations, eq(locations.id, locationBookings.locationId))
+      .where(and(eq(locationBookings.orgId, ctx.orgId), inArray(locationBookings.locationId, [...locIds]), ne(locationBookings.productionId, day.productionId), ne(locationBookings.status, "released"),
+        lte(locationBookings.startDate, day.date), gte(locationBookings.endDate, day.date), isNull(locationBookings.archivedAt)));
+    for (const x of books) {
+      if (x.loc.allowsSharedUse) continue;
+      out.push({ type: "location_clash", severity: x.b.status === "confirmed" ? "error" : "warning", entityType: "locations", entityId: x.loc.id,
+        message: `${x.loc.name} is ${x.b.status === "confirmed" ? "booked" : "on hold"} for ${productionAllowed(ctx, x.b.productionId) ? x.title : "another production"} (${x.b.startDate} → ${x.b.endDate}).` });
     }
   }
   return out.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1));

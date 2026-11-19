@@ -11,6 +11,7 @@ import { productionAllowed } from "../entities/crud";
 import { invalid, notFound } from "../errors";
 import { requireWrite } from "./guards";
 import { shootDayConflicts } from "./conflicts";
+import { DEFAULT_CONTACT_POLICY } from "@/lib/customise";
 
 export interface CallSheetSnapshot {
   schema: 1;
@@ -82,7 +83,7 @@ export async function buildSnapshot(ctx: Ctx, shootDayId: string, tx: DbOrTx = d
     })),
     transport: transport.map((t) => ({ kind: t.kind, pickup: t5(t.pickupTime), from: t.pickupLocation, to: t.dropoffLocation, driver: t.driver, passengers: t.passengers })),
     catering: catering.map((c) => ({ meal: c.meal, time: t5(c.serveTime), headcount: c.headcount, dietary: c.dietaryNotes })),
-    contactPolicy: "Personal phone numbers and addresses are not printed. Contact cast and crew through the production office.",
+    contactPolicy: ctx.settings?.callSheetContactPolicy?.trim() || DEFAULT_CONTACT_POLICY,
     openIssues: conflicts.map((c) => ({ severity: c.severity, message: c.message })),
   };
 }
