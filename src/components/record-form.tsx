@@ -1,5 +1,4 @@
 "use client";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { getEntity } from "@/lib/entities";
 import { createRecord, updateRecord } from "@/app/actions";
@@ -14,7 +13,6 @@ export function RecordForm({ entity, initial, fixed = {}, onDone, redacted = [],
   redacted?: string[]; canWrite?: boolean; submitLabel?: string; id?: string;
 }) {
   const d = getEntity(entity)!;
-  const router = useRouter();
   const { run, pending } = useRun();
   const editing = !!initial?.id;
   const [vals, setVals] = useState<Record<string, unknown>>(() => ({ ...(initial ?? {}), ...fixed }));
@@ -41,7 +39,8 @@ export function RecordForm({ entity, initial, fixed = {}, onDone, redacted = [],
     }
     invalidateRefCache();
     await run(Promise.resolve(res), editing ? "Saved" : `${d.label} created`);
-    router.refresh();
+    // The server action already revalidates the route; a second client refresh can swallow a
+    // navigation the user starts immediately afterwards.
     onDone?.(res.data);
   }
 

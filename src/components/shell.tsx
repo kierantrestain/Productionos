@@ -45,8 +45,8 @@ export function Shell({ nav, user, children }: { nav: NavItem[]; user: { name: s
         <div className="main">
           <header className="topbar">
             <button className="btn btn-quiet icon-btn menu-toggle" aria-label="Open navigation" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="menu" /></button>
-            <button className="btn" style={{ width: "min(420px, 100%)", justifyContent: "flex-start", color: "var(--text-3)" }} onClick={() => setPalette(true)} aria-label="Search (Ctrl+K)">
-              <Icon name="search" /> Search productions, scenes, people… <span className="spacer" /><kbd className="mono subtle">⌘K</kbd>
+            <button className="btn search-trigger" onClick={() => setPalette(true)} aria-label="Search (Ctrl+K)">
+              <Icon name="search" /> <span className="label-long">Search productions, scenes, people…</span><span className="spacer" /><kbd className="mono subtle">⌘K</kbd>
             </button>
             <div className="spacer" />
             {user.isDemo && <span className="badge tone-warn" title="This organisation contains clearly labelled demonstration data, not imported source records.">Demo workspace</span>}
