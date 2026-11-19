@@ -246,10 +246,11 @@ dialog.modal { border: 1px solid var(--border); border-radius: var(--radius-l); 
 @media (max-width: 700px) { .cal .day { min-height: 70px; } .cal .ev { font-size: 10px; } }
 
 /* ── Stripboard / shoot-day command ── */
-.strip { display: grid; grid-template-columns: 56px 72px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.strip { display: grid; grid-template-columns: 48px 132px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .strip:last-child { border-bottom: none; }
 .strip.kind-meal, .strip.kind-travel, .strip.kind-company_move { background: var(--surface-2); color: var(--text-2); }
 .strip .time { font-family: var(--font-mono); font-size: 13px; }
+.strip .time input { width: 100%; }
 .strip .sc { font-weight: 700; font-size: 15px; }
 .strip[draggable="true"] { cursor: grab; }
 .strip.drag-over { box-shadow: inset 0 2px 0 var(--accent); }

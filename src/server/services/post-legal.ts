@@ -168,7 +168,7 @@ export async function draftCastDetails(ctx: Ctx, engagementId: string) {
 /** Explicit confirmation step. Without a configured provider the message is blocked, never "sent". */
 export async function confirmMessages(ctx: Ctx, ids: string[]) {
   if (!["org_admin", "producer", "production_manager"].includes(ctx.role)) throw forbidden();
-  if (!ids.length) return { queued: 0, blocked: 0 };
+  if (!ids.length) return { queued: 0, blocked: 0, providerReason: undefined as string | undefined };
   return db.transaction(async (tx) => {
     const rows = await tx.select().from(outboundMessages).where(and(eq(outboundMessages.orgId, ctx.orgId), inArray(outboundMessages.id, ids)));
     const s = mailStatus();

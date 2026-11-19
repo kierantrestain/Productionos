@@ -11,7 +11,7 @@ import { Badge, PageHeader } from "./ui";
 import type { ReactNode } from "react";
 
 /** Full record page: editable form, related records, documents, comments and audit trail. */
-export async function RecordDetail({ ctx, entity, id, sp, eyebrow, actions, aside, below }: { ctx: Ctx; entity: string; id: string; sp: SP; eyebrow?: ReactNode; actions?: ReactNode; aside?: ReactNode; below?: ReactNode }) {
+export async function RecordDetail({ ctx, entity, id, eyebrow, actions, aside, below, bare }: { ctx: Ctx; entity: string; id: string; sp?: SP; eyebrow?: ReactNode; actions?: ReactNode; aside?: ReactNode; below?: ReactNode; bare?: boolean }) {
   const d = getEntity(entity)!;
   const row = await getEntityRow(ctx, entity, id);
   const writable = canWrite(ctx.role, d.domain, d.key);
@@ -21,8 +21,8 @@ export async function RecordDetail({ ctx, entity, id, sp, eyebrow, actions, asid
   const childTabs = (d.children ?? []).filter((c) => { const cd = getEntity(c.entity); return cd && canRead(ctx.role, cd.readDomain ?? cd.domain); });
   return (
     <div>
-      <PageHeader title={<span className="row" style={{ gap: 10 }}>{refLabel(d, row)} {status && <Badge value={status} />}</span>}
-        eyebrow={eyebrow ?? <><Link href={`/data/${entity}`}>{d.plural}</Link></>} lede={d.description} actions={actions} />
+      {bare ? (actions && <div className="actions" style={{ marginBottom: 16 }}>{actions}</div>) : <PageHeader title={<span className="row" style={{ gap: 10 }}>{refLabel(d, row)} {status && <Badge value={status} />}</span>}
+        eyebrow={eyebrow ?? <><Link href={`/data/${entity}`}>{d.plural}</Link></>} lede={d.description} actions={actions} />}
       <div className="grid-2">
         <div className="stack">
           <section className="panel" aria-label="Details">

@@ -173,3 +173,25 @@ describe("first-release producer journey", () => {
     expect(del.rows[0].status).toBe("delivered");
   });
 });
+
+describe("resource demand is peak-per-day, not summed across sequential scenes", () => {
+  it("does not flag kit reused across consecutive scenes of one unit", async () => {
+    const org = await makeOrg("Peak");
+    const p = await makeUser(org.id, "org_admin");
+    const prod = await createEntity(p, "productions", { title: "Peak test", kind: "gameshow" });
+    const cams = await createEntity(p, "resources", { name: "Ped camera", kind: "equipment", quantity: 4 });
+    const day = await createEntity(p, "shoot_days", { productionId: prod.id, date: "2027-09-01", generalCall: "08:00" });
+    for (let i = 1; i <= 5; i++) {
+      const s = await createEntity(p, "scenes", { productionId: prod.id, number: String(i), title: `Round ${i}` });
+      await linkSceneResource(p, s.id, cams.id, 4);
+      await addSceneToDay(p, day.id, s.id);
+    }
+    expect((await shootDayConflicts(p, day.id)).some((c) => c.type === "resource_overcommitted")).toBe(false);
+    const prod2 = await createEntity(p, "productions", { title: "Second unit", kind: "series" });
+    const s2 = await createEntity(p, "scenes", { productionId: prod2.id, number: "1", title: "Pickup" });
+    await linkSceneResource(p, s2.id, cams.id, 1);
+    const day2 = await createEntity(p, "shoot_days", { productionId: prod2.id, date: "2027-09-01" });
+    await addSceneToDay(p, day2.id, s2.id);
+    expect((await shootDayConflicts(p, day.id)).find((c) => c.type === "resource_overcommitted")?.message).toMatch(/5 needed .* only 4/);
+  });
+});

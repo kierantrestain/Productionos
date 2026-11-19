@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres, POSTGRES_DB: productionos_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/productionos_test
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/productionos_test
+      AUTH_SECRET: ci-only-not-secret
+      STORAGE_PROVIDER: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+      - name: E2E (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          psql postgres://postgres:postgres@localhost:5432/postgres -c "create database productionos_e2e"
+          DATABASE_URL=postgres://postgres:postgres@localhost:5432/productionos_e2e pnpm db:migrate
+          DATABASE_URL=postgres://postgres:postgres@localhost:5432/productionos_e2e DEMO_PASSWORD=ci-demo-password pnpm db:seed:demo
+          DATABASE_URL=postgres://postgres:postgres@localhost:5432/productionos_e2e DEMO_PASSWORD=ci-demo-password pnpm test:e2e

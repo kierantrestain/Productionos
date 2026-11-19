@@ -89,7 +89,7 @@ export function RefSelect({ entity, value, onChange, productionId, id, autoFocus
   return (
     <select id={id} className={className} value={value ?? ""} autoFocus={autoFocus} onBlur={onBlur} required={required} onChange={(e) => onChange(e.target.value || null)}>
       <option value="">{opts ? "—" : "Loading…"}</option>
-      {value && opts && !opts.some((o) => o.id === value) && <option value={value}>(current)</option>}
+      {value && opts && !opts.some((o) => o.id === value) && <option value={value}>(restricted)</option>}
       {opts?.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
     </select>
   );

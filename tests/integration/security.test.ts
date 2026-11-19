@@ -6,7 +6,7 @@ import { decideApproval, requestApproval, requiredRoleForSpend } from "@/server/
 import { budgetSummary, summarise, vatOn } from "@/server/services/finance";
 import { getCallSheet, issueCallSheet } from "@/server/services/callsheets";
 import { addSceneToDay, linkScenePerson } from "@/server/services/production-ops";
-import { makeOrg, makeUser, refresh } from "../support/factory";
+import { makeOrg, makeUser } from "../support/factory";
 import type { Ctx } from "@/server/auth/context";
 
 let adminA: Ctx, producerA: Ctx, adminB: Ctx;

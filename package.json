@@ -46,7 +46,7 @@
     "eslint": "^9.39.5",
     "eslint-config-next": "15.5.29",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.12"
   }
 }

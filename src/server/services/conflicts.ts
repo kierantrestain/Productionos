@@ -97,7 +97,8 @@ export async function shootDayConflicts(ctx: Ctx, shootDayId: string): Promise<C
   }
 
   // 4/5. Resources: demand on this date across the org vs. quantity owned.
-  const sceneDemand = dayIds.length ? await db.select({ resourceId: sceneResources.resourceId, dayId: scheduleBlocks.shootDayId, qty: sql<number>`sum(${sceneResources.quantity})::int` })
+  // Peak (not summed) demand per day: one kit item serves consecutive scenes; two units on one date both need it.
+  const sceneDemand = dayIds.length ? await db.select({ resourceId: sceneResources.resourceId, dayId: scheduleBlocks.shootDayId, qty: sql<number>`max(${sceneResources.quantity})::int` })
     .from(scheduleBlocks).innerJoin(sceneResources, eq(sceneResources.sceneId, scheduleBlocks.sceneId))
     .where(and(inArray(scheduleBlocks.shootDayId, dayIds), isNull(scheduleBlocks.archivedAt)))
     .groupBy(sceneResources.resourceId, scheduleBlocks.shootDayId) : [];

@@ -8,7 +8,7 @@ import { loadProduction } from "@/server/services/guards";
 import { Workspace } from "@/components/workspace";
 import { RecordDetail } from "@/components/record-detail";
 import { EntityView, type SP } from "@/components/entity-view";
-import { Badge, Panel } from "@/components/ui";
+import { Badge } from "@/components/ui";
 import { date, humanize } from "@/lib/format";
 import { canRead } from "@/lib/permissions";
 import { productionFinance } from "@/server/services/finance";
@@ -37,7 +37,7 @@ export default async function ProductionPage({ params, searchParams }: { params:
     const fin = canRead(ctx.role, "finance") ? await productionFinance(ctx, id) : [];
     const next = days.find((d) => d.date >= new Date().toISOString().slice(0, 10) && d.status !== "cancelled");
     return (
-      <RecordDetail ctx={ctx} entity="productions" id={id} sp={sp} eyebrow={<><Link href="/productions">Productions</Link> / {humanize(p.kind)}</>}
+      <RecordDetail bare ctx={ctx} entity="productions" id={id} eyebrow={<><Link href="/productions">Productions</Link> / {humanize(p.kind)}</>}
         actions={<><Link className="btn" href={`/schedule?production=${id}`}>Stripboard</Link>{next && <Link className="btn btn-primary" href={`/schedule/day/${next.id}`}>Next shoot day · {date(next.date, { short: true })}</Link>}</>}
         below={
           <div className="metrics" style={{ marginBottom: 0 }}>

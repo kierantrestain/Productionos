@@ -57,7 +57,6 @@ export const TABLES = {
   sops: s.sops,
 } satisfies Record<RegisteredEntityKey, unknown>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyTable = any;
 export function tableFor(key: RegisteredEntityKey): AnyTable {
   return TABLES[key];
