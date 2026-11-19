@@ -19,8 +19,8 @@ test-results/
 *.tsbuildinfo
 next-env.d.ts
 # Local object storage (dev driver) and backups
-storage/
-backups/
+/storage/
+/backups/
 # Airtable exports are PRIVATE
 04_migration_tools/private_exports/
 private_exports/
