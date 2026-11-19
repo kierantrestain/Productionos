@@ -26,7 +26,10 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
   },
   "dependencies": {
+    "@astryxdesign/core": "0.7.16",
+    "@astryxdesign/theme-neutral": "0.7.16",
     "@aws-sdk/client-s3": "^3.1172.0",
+    "@stylexjs/stylex": "^0.19.2",
     "drizzle-orm": "0.45.4",
     "next": "15.5.29",
     "postgres": "^4.1.1",
@@ -36,6 +39,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "0.7.16",
     "@eslint/eslintrc": "^3.3.7",
     "@playwright/test": "1.63.0",
     "@types/node": "^26.6.6",

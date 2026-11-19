@@ -15,7 +15,7 @@
 import { sql } from "drizzle-orm";
 import { customType } from "drizzle-orm/pg-core";
 import {
-  pgTable, uuid, text, timestamp, integer, bigint, boolean, date, time, jsonb,
+  pgTable, uuid, text, timestamp, integer, bigint, boolean, date, time, jsonb, doublePrecision,
   uniqueIndex, index, primaryKey,
 } from "drizzle-orm/pg-core";
 
@@ -62,6 +62,8 @@ export const memberships = pgTable("memberships", {
   orgId: uuid("org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: text("role").notNull(),
+  /** Role on the base platform: owner | creator | editor | commenter | reader. */
+  platformRole: text("platform_role").notNull().default("editor"),
   personId: uuid("person_id"),
   createdAt: ts("created_at").notNull().defaultNow(),
 }, (t) => [uniqueIndex("memberships_org_user").on(t.orgId, t.userId)]);
@@ -1181,4 +1183,162 @@ export const productionTemplates = pgTable("production_templates", {
   description: text("description"),
   baseKind: text("base_kind").notNull(),
   blueprint: jsonb("blueprint").notNull(),
+});
+
+// ═════════════════════════ Platform: no-code bases (Airtable-class) ═════════════════════════
+
+/** Workspace-level role for the base platform. commenter/reader are free (non-editing) seats. */
+export const PLATFORM_ROLES = ["owner", "creator", "editor", "commenter", "reader"] as const;
+
+export const bases = pgTable("bases", {
+  ...common(),
+  name: text("name").notNull(),
+  description: text("description"),
+  icon: text("icon").notNull().default("grid"),
+  color: text("color").notNull().default("blue"),
+  templateKey: text("template_key"),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+/** Per-base role overrides (Airtable "base collaborators"). */
+export const baseMembers = pgTable("base_members", {
+  orgId: uuid("org_id").notNull(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.baseId, t.userId] })]);
+
+export interface TablePermissions { create?: string; edit?: string; delete?: string }
+export const baseTables = pgTable("base_tables", {
+  ...common(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  primaryFieldId: uuid("primary_field_id"),
+  autonumberSeq: integer("autonumber_seq").notNull().default(0),
+  /** Minimum role per action, e.g. { create: "editor", delete: "creator" }. */
+  permissions: jsonb("permissions").$type<TablePermissions>().notNull().default({}),
+}, (t) => [index("base_tables_base").on(t.baseId)]);
+
+export interface FieldPermissions { edit?: string; hiddenBelow?: string }
+export const baseFields = pgTable("base_fields", {
+  ...common(),
+  tableId: uuid("table_id").notNull().references(() => baseTables.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  options: jsonb("options").$type<import("@/lib/platform/fields").FieldOptions>().notNull().default({}),
+  description: text("description"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  /** Minimum role to edit; minimum role to see (fields hidden below it). */
+  permissions: jsonb("permissions").$type<FieldPermissions>().notNull().default({}),
+}, (t) => [index("base_fields_table").on(t.tableId)]);
+
+export const baseRecords = pgTable("base_records", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").notNull().references(() => baseTables.id, { onDelete: "cascade" }),
+  /** Cell values keyed by field id. Computed fields are never stored. */
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+  rowColor: text("row_color"),
+  autonumber: integer("autonumber").notNull(),
+  sortOrder: doublePrecision("sort_order").notNull().default(0),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  createdBy: uuid("created_by"),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+  updatedBy: uuid("updated_by"),
+  version: integer("version").notNull().default(1),
+  deletedAt: ts("deleted_at"),
+  sourceRef: text("source_ref"),
+}, (t) => [index("base_records_table").on(t.tableId, t.deletedAt), uniqueIndex("base_records_source").on(t.tableId, t.sourceRef)]);
+
+export interface ViewConfig {
+  filters?: { conjunction: "and" | "or"; conditions: { fieldId: string; op: string; value?: unknown }[] };
+  sorts?: { fieldId: string; dir: "asc" | "desc" }[];
+  groups?: { fieldId: string; dir: "asc" | "desc" }[];
+  hidden?: string[];
+  order?: string[];
+  widths?: Record<string, number>;
+  frozen?: number;
+  rowHeight?: "short" | "medium" | "tall" | "extra";
+  color?: { mode: "none" | "select" | "conditions"; fieldId?: string; rules?: { color: string; fieldId: string; op: string; value?: unknown }[] };
+  kanbanFieldId?: string; dateFieldId?: string; endDateFieldId?: string; coverFieldId?: string; titleFieldId?: string;
+  form?: { title?: string; description?: string; fields?: { fieldId: string; required?: boolean; help?: string }[]; submitLabel?: string; successMessage?: string; isPublic?: boolean };
+  summaries?: Record<string, string>;
+}
+export const baseViews = pgTable("base_views", {
+  ...common(),
+  tableId: uuid("table_id").notNull().references(() => baseTables.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  type: text("type").notNull().default("grid"), // grid | kanban | calendar | gallery | form | timeline | list
+  config: jsonb("config").$type<ViewConfig>().notNull().default({}),
+  sortOrder: integer("sort_order").notNull().default(0),
+  /** Null = collaborative view; a user id = that user's personal view. */
+  ownerUserId: uuid("owner_user_id"),
+  isLocked: boolean("is_locked").notNull().default(false),
+  /** Minimum role that can see this view. */
+  visibleTo: text("visible_to"),
+  shareToken: text("share_token").unique(),
+}, (t) => [index("base_views_table").on(t.tableId)]);
+
+export const recordComments = pgTable("record_comments", {
+  id: id(),
+  orgId: uuid("org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  recordId: uuid("record_id").notNull().references(() => baseRecords.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  mentions: jsonb("mentions").$type<string[]>().notNull().default([]),
+  createdBy: uuid("created_by").notNull(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  editedAt: ts("edited_at"),
+  deletedAt: ts("deleted_at"),
+}, (t) => [index("record_comments_record").on(t.recordId)]);
+
+/** Cell-level revision history per record. */
+export const recordRevisions = pgTable("record_revisions", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  recordId: uuid("record_id").notNull(),
+  tableId: uuid("table_id").notNull(),
+  action: text("action").notNull(), // create | update | delete | restore
+  changes: jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>().notNull().default({}),
+  actorUserId: uuid("actor_user_id"),
+  actorLabel: text("actor_label"),
+  at: ts("at").notNull().defaultNow(),
+}, (t) => [index("record_revisions_record").on(t.recordId, t.at)]);
+
+/** Interfaces: dashboards made of widgets (charts, numbers, record lists). */
+export const baseInterfaces = pgTable("base_interfaces", {
+  ...common(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  widgets: jsonb("widgets").$type<Record<string, unknown>[]>().notNull().default([]),
+  sortOrder: integer("sort_order").notNull().default(0),
+});
+
+export const baseAutomations = pgTable("base_automations", {
+  ...common(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(false),
+  trigger: jsonb("trigger").$type<Record<string, unknown>>().notNull(),
+  actions: jsonb("actions").$type<Record<string, unknown>[]>().notNull().default([]),
+  lastRunAt: ts("last_run_at"),
+  runCount: integer("run_count").notNull().default(0),
+  failCount: integer("fail_count").notNull().default(0),
+});
+
+/** External data syncs into a table (Airtable, CSV URL, another base table). Secrets are encrypted at rest. */
+export const syncSources = pgTable("sync_sources", {
+  ...common(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").references(() => baseTables.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull().default({}),
+  secretCipher: text("secret_cipher"),
+  intervalMinutes: integer("interval_minutes"),
+  status: text("status").notNull().default("idle"),
+  lastSyncedAt: ts("last_synced_at"),
+  lastError: text("last_error"),
+  lastStats: jsonb("last_stats").$type<Record<string, unknown>>(),
 });

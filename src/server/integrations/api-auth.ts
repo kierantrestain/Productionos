@@ -19,5 +19,5 @@ export async function apiContext(req: Request, scope: string): Promise<{ ctx: Ct
   if (!t.t.scopes.includes(scope)) return NextResponse.json({ error: `missing scope ${scope}` }, { status: 403 });
   await db.update(apiTokens).set({ lastUsedAt: new Date() }).where(eq(apiTokens.id, t.t.id));
   // Integrations read with executive-level visibility but only through the endpoints below; field redaction still applies.
-  return { tokenName: t.t.name, ctx: { userId: t.t.createdBy ?? "00000000-0000-0000-0000-000000000000", orgId: t.org.id, role: "executive", name: `API: ${t.t.name}`, email: "", personId: null, productionIds: "all", orgName: t.org.name, orgIsDemo: t.org.isDemo, settings: t.org.settings ?? {} } };
+  return { tokenName: t.t.name, ctx: { userId: t.t.createdBy ?? "00000000-0000-0000-0000-000000000000", orgId: t.org.id, role: "executive", name: `API: ${t.t.name}`, email: "", personId: null, productionIds: "all", orgName: t.org.name, orgIsDemo: t.org.isDemo, settings: t.org.settings ?? {}, platformRole: "reader" } };
 }

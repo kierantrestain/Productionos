@@ -50,6 +50,13 @@
       "when": 1795103593478,
       "tag": "0006_production_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795115572041,
+      "tag": "0007_platform",
+      "breakpoints": true
     }
   ]
 }

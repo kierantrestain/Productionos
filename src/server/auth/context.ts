@@ -14,4 +14,6 @@ export interface Ctx {
   orgName: string;
   orgIsDemo: boolean;
   settings: OrgSettingsShape;
+  /** Role on the base platform (owner | creator | editor | commenter | reader). */
+  platformRole: string;
 }
