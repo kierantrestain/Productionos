@@ -4,11 +4,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { NavItem } from "@/lib/nav";
 import { ROLE_LABELS, type Role } from "@/lib/permissions";
-import { logoutAction } from "@/app/actions";
+import { logoutAction, switchOrgAction } from "@/app/actions";
 import { Drawer, ToastProvider } from "./client";
 import { Icon } from "./icons";
 
-export function Shell({ nav, user, children }: { nav: NavItem[]; user: { name: string; role: Role; orgName: string; isDemo: boolean }; children: React.ReactNode }) {
+export function Shell({ nav, user, children, orgs = [], orgId }: { nav: NavItem[]; user: { name: string; role: Role; orgName: string; isDemo: boolean }; children: React.ReactNode; orgs?: { id: string; name: string; isDemo: boolean }[]; orgId?: string }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -39,6 +39,9 @@ export function Shell({ nav, user, children }: { nav: NavItem[]; user: { name: s
           <div className="sidebar-foot">
             <div style={{ fontWeight: 600 }}>{user.name}</div>
             <div className="subtle">{ROLE_LABELS[user.role]}</div>
+            {orgs.length > 1 && <select className="select" style={{ marginTop: 8, height: 30, fontSize: 12 }} aria-label="Switch organisation" value={orgId} onChange={(e) => switchOrgAction(e.target.value)}>
+              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}{o.isDemo ? " (demo)" : ""}</option>)}
+            </select>}
             <form action={logoutAction} style={{ marginTop: 8 }}><button className="btn btn-quiet btn-sm" style={{ paddingLeft: 0 }}><Icon name="logout" /> Sign out</button></form>
           </div>
         </aside>

@@ -13,6 +13,7 @@
  *  - Airtable lineage lives in source_records, never as primary identifiers.
  */
 import { sql } from "drizzle-orm";
+import { customType } from "drizzle-orm/pg-core";
 import {
   pgTable, uuid, text, timestamp, integer, bigint, boolean, date, time, jsonb,
   uniqueIndex, index, primaryKey,
@@ -1119,3 +1120,12 @@ export const outboundMessages = pgTable("outbound_messages", {
   lastError: text("last_error"),
   sentAt: ts("sent_at"),
 }, (t) => [uniqueIndex("outbound_idem").on(t.orgId, t.idempotencyKey)]);
+
+const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
+/** File bytes for the `db` storage driver (small deployments without S3). Metadata stays in `attachments`. */
+export const fileBlobs = pgTable("file_blobs", {
+  storageKey: text("storage_key").primaryKey(),
+  bytes: bytea("bytes").notNull(),
+  contentType: text("content_type").notNull(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+});

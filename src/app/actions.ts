@@ -60,6 +60,33 @@ export async function acceptInviteAction(_prev: unknown, form: FormData): Promis
   redirect("/");
 }
 
+export async function setupAction(_prev: unknown, form: FormData): Promise<{ error?: string }> {
+  try {
+    const r = await admin.firstRunSetup({ orgName: String(form.get("orgName") ?? ""), name: String(form.get("name") ?? ""), email: String(form.get("email") ?? ""), password: String(form.get("password") ?? "") });
+    if (form.get("demo") === "on") {
+      const { seedDemo } = await import("@/server/services/demo");
+      await seedDemo({ ownerUserId: r.userId });
+    }
+    const token = await createSession(r.userId, r.orgId);
+    (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_TTL_MS / 1000 });
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  redirect("/");
+}
+
+export async function switchOrgAction(orgId: string) {
+  const ctx = await requireContext();
+  const orgs = await admin.myOrganisations(ctx.userId);
+  if (!orgs.some((o) => o.id === orgId)) return;
+  const jar = await cookies();
+  const old = jar.get(SESSION_COOKIE)?.value;
+  const token = await createSession(ctx.userId, orgId);
+  if (old) await destroySession(old);
+  jar.set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: SESSION_TTL_MS / 1000 });
+  redirect("/");
+}
+
 // ───────────── Generic records ─────────────
 
 export async function createRecord(entity: string, values: Record<string, unknown>): Promise<ActionResult<crud.Row>> {

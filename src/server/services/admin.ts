@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
 import { apiTokens, invites, memberships, organisations, productionMembers, productions, users } from "@/db/schema";
 import { ROLES, type Role } from "@/lib/permissions";
@@ -118,4 +118,32 @@ export async function revokeApiToken(ctx: Ctx, id: string) {
   requireAdmin(ctx);
   await db.update(apiTokens).set({ revokedAt: new Date() }).where(and(eq(apiTokens.id, id), eq(apiTokens.orgId, ctx.orgId)));
   await audit(db, ctx, "revoke_api_token", "api_tokens", id);
+}
+
+// ───────────── First-run setup ─────────────
+
+export async function needsSetup() {
+  const [r] = await db.select({ id: users.id }).from(users).limit(1);
+  return !r;
+}
+
+/** Creates the first organisation and its admin. Refuses once any user exists (race-safe via advisory lock). */
+export async function firstRunSetup(input: { orgName: string; name: string; email: string; password: string }) {
+  if (input.password.length < 10) throw invalid("Use a password of at least 10 characters.");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw invalid("Enter a valid email.");
+  const orgName = input.orgName.trim() || "My Production Company";
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('first-run-setup'))`);
+    const [any] = await tx.select({ id: users.id }).from(users).limit(1);
+    if (any) throw forbidden("Setup has already been completed. Sign in instead.");
+    const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "org";
+    const org = await createOrganisation({ name: orgName, slug: `${slug}-${newToken().slice(0, 6).toLowerCase()}` }, tx);
+    const u = await createUserWithMembership({ orgId: org.id, email: input.email, name: input.name.trim() || "Admin", password: input.password, role: "org_admin" }, tx);
+    return { orgId: org.id, userId: u.id };
+  });
+}
+
+export async function myOrganisations(userId: string) {
+  return db.select({ id: organisations.id, name: organisations.name, isDemo: organisations.isDemo, role: memberships.role })
+    .from(memberships).innerJoin(organisations, eq(organisations.id, memberships.orgId)).where(eq(memberships.userId, userId)).orderBy(asc(organisations.name));
 }

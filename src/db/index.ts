@@ -6,7 +6,7 @@ type DB = PostgresJsDatabase<typeof schema>;
 const g = globalThis as unknown as { __pgClient?: ReturnType<typeof postgres>; __db?: DB };
 
 function connect(): DB {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) throw new Error("DATABASE_URL is not configured");
   const client = postgres(url, {
     max: process.env.VERCEL ? 5 : 10,

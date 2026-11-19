@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { getContext } from "@/server/auth/request";
 import { LoginForm } from "./form";
+import { needsSetup } from "@/server/services/admin";
 
 export const metadata = { title: "Sign in" };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   if (await getContext()) redirect("/");
+  if (await needsSetup()) redirect("/setup");
   const { next } = await searchParams;
   return (
     <main className="auth">
