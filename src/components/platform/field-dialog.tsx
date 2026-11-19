@@ -53,6 +53,7 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved }: { d
 
   return (
     <Dialog isOpen onOpenChange={(open) => !open && onClose()} width={560} padding={6} purpose="form">
+      <div style={{ display: "block", flex: "none" }}>
       <h2 style={{ fontSize: 18, fontWeight: 700 }}>{editing ? `Edit “${field!.name}”` : "Add a field"}</h2>
       <label style={lbl} htmlFor="fd-name">Field name</label>
       <input id="fd-name" autoFocus style={inp} value={name} onChange={(e) => setName(e.target.value)} placeholder={FIELD_META[type].label} />
@@ -154,6 +155,7 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved }: { d
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
         <Button label="Cancel" onClick={onClose} />
         <Button label={editing ? "Save" : "Create field"} variant="primary" clickAction={save} />
+      </div>
       </div>
     </Dialog>
   );

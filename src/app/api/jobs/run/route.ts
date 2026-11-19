@@ -12,7 +12,10 @@ async function handle(req: Request) {
   const stats = await drainOutbox({ budgetMs: 40_000 });
   const { runDueSyncs } = await import("@/server/platform/sync");
   const syncs = await runDueSyncs().catch((e) => ({ error: String(e) }));
-  return NextResponse.json({ ok: true, stats, syncs });
+  const { runScheduledAutomations } = await import("@/server/platform/automations");
+  const scheduled = await runScheduledAutomations().catch((e) => ({ error: String(e) }));
+  const after = await drainOutbox({ budgetMs: 8_000 });
+  return NextResponse.json({ ok: true, stats, syncs, scheduled, after });
 }
 export const GET = handle;
 export const POST = handle;

@@ -240,3 +240,24 @@ export async function setBaseMemberAction(baseId: string, userId: string, role: 
 export async function saveSsoAction(input: Parameters<typeof import("@/server/auth/sso").saveSso>[1]) {
   return toResult(async () => { const { saveSso } = await import("@/server/auth/sso"); await saveSso(await requireContext(), input); done(); });
 }
+
+export async function previewAutomationAction(baseId: string, input: Parameters<typeof import("@/server/platform/automations").previewAutomation>[2], recordId: string) {
+  return toResult(async () => { const { previewAutomation } = await import("@/server/platform/automations"); return previewAutomation(await requireContext(), baseId, input, recordId); });
+}
+export async function decideApprovalAction(id: string, approve: boolean) {
+  return toResult(async () => { const { decideApproval } = await import("@/server/platform/approvals"); const r = await decideApproval(await requireContext(), id, approve); done(); return r; });
+}
+
+// ───────── Agents ─────────
+export async function saveAgentAction(baseId: string, input: Parameters<typeof import("@/server/platform/agents").saveAgent>[2]) {
+  return toResult(async () => { const { saveAgent } = await import("@/server/platform/agents"); const r = await saveAgent(await requireContext(), baseId, input); done(); return { id: r.id }; });
+}
+export async function deleteAgentAction(id: string) {
+  return toResult(async () => { const { deleteAgent } = await import("@/server/platform/agents"); await deleteAgent(await requireContext(), id); done(); });
+}
+export async function sendAgentMessageAction(agentId: string, threadId: string | null, text: string) {
+  return toResult(async () => { const { sendAgentMessage, getThread } = await import("@/server/platform/agents"); const ctx = await requireContext(); const r = await sendAgentMessage(ctx, agentId, threadId, text); const t = await getThread(ctx, r.threadId); return { threadId: r.threadId, items: t.items, proposals: t.proposals }; });
+}
+export async function getThreadAction(threadId: string) {
+  return toResult(async () => { const { getThread } = await import("@/server/platform/agents"); const t = await getThread(await requireContext(), threadId); return { items: t.items, proposals: t.proposals }; });
+}

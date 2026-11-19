@@ -32,7 +32,7 @@ function privateAddr(ip: string): boolean {
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127);
 }
 /** SSRF guard: https only, and the host must not resolve to a private or loopback address. */
-async function assertPublicUrl(raw: string) {
+export async function assertPublicUrl(raw: string) {
   let u: URL; try { u = new URL(raw); } catch { throw invalid("Enter a valid URL."); }
   if (u.protocol !== "https:") throw invalid("Only https:// sources are allowed.");
   const addrs = await lookup(u.hostname, { all: true }).catch(() => []);

@@ -14,7 +14,9 @@ import { baseViews, memberships, organisations, users } from "@/db/schema";
 import { createBaseFromSpec } from "@/server/platform/spec";
 import { createRecords, updateRecord, listComments } from "@/server/platform/records";
 import { runView } from "@/server/platform/query";
-import { saveAutomation } from "@/server/platform/automations";
+import { previewAutomation, receiveWebhook, runScheduledAutomations, saveAutomation } from "@/server/platform/automations";
+import { decideApproval, listApprovals } from "@/server/platform/approvals";
+import { __setAgentClient, getThread, saveAgent, sendAgentMessage } from "@/server/platform/agents";
 import { computeWidgets } from "@/server/platform/interfaces";
 import { inviteMember, setBaseMember, setPlatformRole } from "@/server/platform/members";
 import { loadBaseStructure, updateView } from "@/server/platform/schema";
@@ -42,7 +44,7 @@ beforeAll(async () => {
   ] });
   baseId = r.baseId; T = r.tableIds;
 });
-afterAll(async () => { __setSyncFetcher(null); __setSsoFetcher(null); __setJwks(null); await closeDb(); });
+afterAll(async () => { __setAgentClient(null); __setSyncFetcher(null); __setSsoFetcher(null); __setJwks(null); await closeDb(); });
 
 describe("automations", () => {
   it("won deal → linked project + comment, via the outbox worker; idempotent and depth-capped", async () => {
@@ -181,5 +183,83 @@ describe("OIDC single sign-on (MOCK-ONLY identity provider)", () => {
     nonce = new URL(s2.url).searchParams.get("nonce")!;
     await expect(finishSso({ code: "c", state: new URL(s2.url).searchParams.get("state") }, s2.cookie)).rejects.toThrow();
     void users; void organisations;
+  });
+});
+
+describe("automations v2: branches, preview, webhook trigger, schedule, approvals", () => {
+  it("branches on conditions, previews without writing, and queues outbound webhooks for approval", async () => {
+    const stage = await fid("Deals", "Stage"), dealName = await fid("Deals", "Deal");
+    const wonId = (await loadBaseStructure(owner, baseId)).fields.find((f) => f.id === stage)!.options.choices!.find((c) => c.name === "Won")!.id;
+    const value = await fid("Deals", "Value");
+    const def = { name: "Value watcher", isEnabled: true, trigger: { type: "record_updated" as const, tableId: T.Deals, watchFieldIds: [value] },
+      actions: [{ type: "branch" as const, conditions: { conjunction: "and" as const, conditions: [{ fieldId: stage, op: "is", value: wonId }] },
+        then: [{ type: "add_comment" as const, body: "Won deal {Deal} changed value" }, { type: "webhook" as const, url: "https://hooks.example.com/x" }],
+        else: [{ type: "add_comment" as const, body: "Open deal {Deal} changed value" }] }] };
+    const b = (await runView(owner, "owner", T.Deals, {})).rows.find((x) => x.values[dealName] === "B")!;
+    const pv = await previewAutomation(owner, baseId, def, b.id);
+    expect(pv.steps.join(" | ")).toMatch(/then.*Won deal B changed value.*queued for a creator's approval/);
+    expect(await listComments(owner, b.id)).toHaveLength(0); // preview wrote nothing
+    await saveAutomation(owner, baseId, def);
+    await updateRecord(editor, b.id, { [value]: 999 });
+    await drainOutbox({ orgId, budgetMs: 20_000 });
+    expect((await listComments(owner, b.id)).map((c) => c.body)).toContain("Won deal B changed value");
+    const pending = (await listApprovals(owner, baseId)).filter((a) => a.kind === "webhook");
+    expect(pending).toHaveLength(1);
+    await expect(decideApproval(editor, pending[0].id, true)).rejects.toThrow(/Only creators/);
+    await decideApproval(owner, pending[0].id, false);
+    await expect(decideApproval(owner, pending[0].id, true)).rejects.toThrow(/already rejected/);
+  });
+  it("inbound webhook creates a record and runs the steps; unknown tokens 404", async () => {
+    const a = await saveAutomation(owner, baseId, { name: "Lead hook", isEnabled: true, trigger: { type: "webhook", tableId: T.Deals }, actions: [{ type: "add_comment", body: "Arrived by webhook: {Deal}" }] });
+    expect(a.webhookToken).toMatch(/^[A-Za-z0-9_-]{30,}$/);
+    const r = await receiveWebhook(a.webhookToken!, { Deal: "Hooked", Value: 42, Nonsense: "ignored" });
+    expect(r.status).toBe("succeeded");
+    const row = (await runView(owner, "owner", T.Deals, {}, { recordIds: [r.recordId] })).rows[0];
+    expect(row.values[await fid("Deals", "Value")]).toBe(42);
+    expect((await listComments(owner, r.recordId)).map((c) => c.body)).toContain("Arrived by webhook: Hooked");
+    await expect(receiveWebhook("x".repeat(32), {})).rejects.toThrow();
+  });
+  it("scheduled automations process each matching record once per period", async () => {
+    const value = await fid("Deals", "Value");
+    await saveAutomation(owner, baseId, { name: "Daily big deals", isEnabled: true, trigger: { type: "schedule", tableId: T.Deals, schedule: { every: "day", hour: 0 }, conditions: { conjunction: "and", conditions: [{ fieldId: value, op: ">=", value: 300 }] } }, actions: [{ type: "add_comment", body: "Daily check: {Deal}" }] });
+    const now = new Date("2031-05-05T09:00:00Z");
+    const first = (await runScheduledAutomations(now)).find((x) => x.records > 0);
+    expect(first?.records).toBeGreaterThanOrEqual(1);
+    const again = await runScheduledAutomations(now);
+    expect(again.every((x) => x.records === 0)).toBe(true);
+  });
+});
+
+describe("AI agents (MOCK-ONLY model client)", () => {
+  it("reads with the user's permissions, files proposals instead of writing, and approval applies them", async () => {
+    const stage = await fid("Deals", "Stage"), dealName = await fid("Deals", "Deal");
+    const agent = await saveAgent(owner, baseId, { name: "Ops", instructions: "Keep deals tidy.", tableIds: [T.Deals], canPropose: true });
+    let step = 0; let seenSystem = "";
+    __setAgentClient({ beta: { messages: { create: async (body: Record<string, unknown>) => {
+      seenSystem = String(body.system);
+      const msgs = body.messages as { role: string; content: { type: string; content?: string }[] }[];
+      const last = msgs[msgs.length - 1];
+      step++;
+      const msg = (content: unknown[], stop: string) => ({ id: `m${step}`, type: "message", role: "assistant", model: "mock", content, stop_reason: stop, stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 } }) as never;
+      if (step === 1) return msg([{ type: "text", text: "Let me look." }, { type: "tool_use", id: "t1", name: "search_records", input: { table: "Deals", query: "C", limit: 5 } }], "tool_use");
+      if (step === 2) {
+        const line = String(last.content[0].content).split("\n").find((l) => l.includes("Deal: C;"))!;
+        const id = /id ([0-9a-f-]{36})/.exec(line)![1];
+        return msg([{ type: "tool_use", id: "t2", name: "propose_update_record", input: { table: "Deals", record_id: id, values: [{ field: "Stage", value: "Lost" }], reason: "Customer declined" } }], "tool_use");
+      }
+      return msg([{ type: "text", text: "I've proposed marking C as Lost — approve it when ready." }], "end_turn");
+    } } } });
+    const { threadId } = await sendAgentMessage(editor, agent.id, null, "Deal C fell through, please update it.");
+    expect(seenSystem).toContain("You cannot change data directly");
+    const t = await getThread(editor, threadId);
+    expect(t.items.map((i) => i.kind)).toEqual(["user", "assistant", "activity", "activity", "assistant"]);
+    expect(t.proposals).toHaveLength(1);
+    const c = (await runView(owner, "owner", T.Deals, {})).rows.find((x) => x.values[dealName] === "C")!;
+    const lostId = (await loadBaseStructure(owner, baseId)).fields.find((f) => f.id === stage)!.options.choices!.find((x) => x.name === "Lost")!.id;
+    expect(c.values[stage]).not.toBe(lostId); // nothing written yet
+    await expect(getThread(owner, threadId)).rejects.toThrow(/not found/); // threads are private to their user
+    await decideApproval(editor, t.proposals[0].id, true);
+    const after = (await runView(owner, "owner", T.Deals, {}, { recordIds: [c.id] })).rows[0];
+    expect(after.values[stage]).toBe(lostId);
   });
 });

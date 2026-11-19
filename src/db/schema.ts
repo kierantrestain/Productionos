@@ -1326,6 +1326,9 @@ export const baseAutomations = pgTable("base_automations", {
   trigger: jsonb("trigger").$type<Record<string, unknown>>().notNull(),
   actions: jsonb("actions").$type<Record<string, unknown>[]>().notNull().default([]),
   lastRunAt: ts("last_run_at"),
+  /** Secret path token for inbound-webhook triggers (rotatable). */
+  webhookToken: text("webhook_token").unique(),
+  lastScheduledAt: ts("last_scheduled_at"),
   runCount: integer("run_count").notNull().default(0),
   failCount: integer("fail_count").notNull().default(0),
 });
@@ -1358,3 +1361,55 @@ export const ssoConfigs = pgTable("sso_configs", {
   updatedAt: ts("updated_at").notNull().defaultNow(),
   updatedBy: uuid("updated_by"),
 });
+
+/** In-app AI agents for a base: instructions + tools scoped to tables; acts with the chatting user's permissions. */
+export const baseAgents = pgTable("base_agents", {
+  ...common(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  emoji: text("emoji").notNull().default("🤖"),
+  color: text("color").notNull().default("blue"),
+  role: text("role"),
+  instructions: text("instructions").notNull().default(""),
+  tableIds: jsonb("table_ids").$type<string[]>().notNull().default([]),
+  canPropose: boolean("can_propose").notNull().default(true),
+});
+
+export const agentThreads = pgTable("agent_threads", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  agentId: uuid("agent_id").notNull().references(() => baseAgents.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  title: text("title").notNull().default("New conversation"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (t) => [index("agent_threads_agent_user").on(t.agentId, t.userId)]);
+
+/** Append-only transcript; `content` holds the model's content blocks unchanged so they can be replayed. */
+export const agentMessages = pgTable("agent_messages", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  threadId: uuid("thread_id").notNull().references(() => agentThreads.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  content: jsonb("content").$type<unknown>().notNull(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+}, (t) => [index("agent_messages_thread").on(t.threadId, t.createdAt)]);
+
+/** Human approval queue for agent-proposed writes and automation outbound requests. */
+export const baseApprovals = pgTable("base_approvals", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  source: text("source").notNull(), // agent | automation
+  sourceId: uuid("source_id"),
+  threadId: uuid("thread_id"),
+  requestedBy: uuid("requested_by"),
+  kind: text("kind").notNull(), // create_record | update_record | add_comment | webhook
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  summary: text("summary").notNull(),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected | failed
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  decidedBy: uuid("decided_by"),
+  decidedAt: ts("decided_at"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+}, (t) => [index("base_approvals_base_status").on(t.baseId, t.status)]);
