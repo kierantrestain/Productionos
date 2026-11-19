@@ -4,7 +4,7 @@ export interface NavItem { href: string; label: string; icon: string; domain?: D
 
 /** The 12 workspaces plus personal/admin areas. Visibility is cosmetic; the server enforces access. */
 export const NAV: NavItem[] = [
-  { href: "/", label: "Command Centre", icon: "home", section: "Overview", roles: ["org_admin", "executive", "producer", "production_manager", "department_head", "finance_legal", "post", "commercial"] },
+  { href: "/production", label: "Production Command", icon: "home", section: "Overview", roles: ["org_admin", "executive", "producer", "production_manager", "department_head", "finance_legal", "post", "commercial"] },
   { href: "/my", label: "My schedule", icon: "clock", section: "Overview", roles: ["cast", "crew", "department_head", "production_manager", "producer"] },
   { href: "/approvals", label: "Approvals", icon: "check", section: "Overview", domain: "approvals" },
   { href: "/slate", label: "Slate & IP", icon: "slate", section: "Develop", domain: "slate" },
@@ -30,5 +30,5 @@ export function navFor(role: Role) {
 export function homeFor(role: Role) {
   if (role === "cast" || role === "crew") return "/my";
   if (role === "external_reviewer") return "/post";
-  return "/";
+  return "/production";
 }

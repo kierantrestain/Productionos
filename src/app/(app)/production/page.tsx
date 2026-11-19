@@ -12,7 +12,7 @@ export const maxDuration = 300;
 
 export default async function CommandCentrePage({ searchParams }: { searchParams: Promise<{ loadDemo?: string }> }) {
   const ctx = await requirePageContext();
-  if (homeFor(ctx.role) !== "/") redirect(homeFor(ctx.role));
+  if (homeFor(ctx.role) !== "/production") redirect(homeFor(ctx.role));
   const data = await commandCentre(ctx);
   const loadDemo = (await searchParams).loadDemo === "1" && ctx.role === "org_admin";
   return (

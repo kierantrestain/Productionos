@@ -162,3 +162,25 @@ describe("permissions", () => {
     await expect(archiveField(editor, hours)).rejects.toThrow(/creator access/);
   });
 });
+
+describe("templates", () => {
+  it("every template builds a valid, linked base", async () => {
+    const { TEMPLATES, templateSpec } = await import("@/server/platform/templates");
+    for (const t of TEMPLATES) {
+      const r = await createBaseFromSpec(owner, templateSpec(t.key));
+      for (const tid of Object.values(r.tableIds)) await runView(owner, "owner", tid, {});
+    }
+    expect(TEMPLATES.length).toBeGreaterThanOrEqual(8);
+  });
+  it("seed values on auto-created inverse links are linked both ways and roll up", async () => {
+    const { templateSpec } = await import("@/server/platform/templates");
+    const r = await createBaseFromSpec(owner, templateSpec("projects"));
+    const v = await runView(owner, "owner", r.tableIds.Projects, {});
+    const byName = (n: string) => v.fields.find((f) => f.name === n)!.id;
+    const row = v.rows[0];
+    expect((row.values[byName("Tasks")] as unknown[]).length).toBe(2);
+    expect(row.values[byName("Task count")]).toBe(2);
+    expect(row.values[byName("Done tasks")]).toBe(1);
+    expect(row.values[byName("Progress")]).toBe(0.5);
+  });
+});

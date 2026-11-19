@@ -10,6 +10,7 @@ import { FIELD_TYPES, newChoiceId, type FieldOptions, type FieldType, COLORS } f
 import type { Ctx } from "../auth/context";
 import { invalid } from "../errors";
 import { createBase, createTableTx, normaliseOptions, validateComputed } from "./schema";
+import { baseAccess, requireRole } from "./access";
 import { createRecords } from "./records";
 
 export interface SpecField {
@@ -45,13 +46,17 @@ export function validateSpec(spec: BaseSpec) {
   }
 }
 
-export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec) {
+/** Build a new base from a spec — or, with `intoBaseId`, add the spec's tables to an existing base. */
+export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec, opts: { intoBaseId?: string } = {}) {
   validateSpec(spec);
   return db.transaction(async (tx) => {
-    const base = await createBase(ctx, { name: spec.name, icon: spec.icon, color: spec.color, description: spec.description, blank: false }, tx);
+    let base: { id: string };
+    if (opts.intoBaseId) { const a = await baseAccess(ctx, opts.intoBaseId, tx); requireRole(a, "creator", "add tables"); base = a.base; }
+    else base = await createBase(ctx, { name: spec.name, icon: spec.icon, color: spec.color, description: spec.description, blank: false }, tx);
     const tableIds = new Map<string, string>();
     const fieldIds = new Map<string, string>(); // "Table.Field" → id
     const key = (t: string, f: string) => `${t}\u0000${f}`;
+    const linkTarget = new Map<string, string>(); // "Table.LinkField" → linked table name (declared and inverse links)
     const choiceOpts = (f: SpecField): FieldOptions => ({ ...(f.options ?? {}), choices: (f.choices ?? []).map((c, i) => typeof c === "string" ? { id: newChoiceId(), name: c, color: COLORS[i % COLORS.length] } : { id: newChoiceId(), name: c.name, color: (COLORS.includes(c.color as never) ? c.color : COLORS[i % COLORS.length]) as never }) });
     // 1. Tables with their primary field.
     for (const t of spec.tables) {
@@ -74,10 +79,12 @@ export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec) {
       if (f.type !== "link" || fieldIds.has(key(t.name, f.name))) continue;
       const target = f.linkTo!;
       const row = await insertField(t.name, f, { linkedTableId: tableIds.get(target)!, singleRecord: f.singleRecord }, i * 2);
+      linkTarget.set(key(t.name, f.name), target);
       const declaredInverse = spec.tables.find((x) => x.name === target)?.fields.find((x) => x.type === "link" && x.linkTo === t.name && (f.inverseName ? x.name === f.inverseName : true) && !fieldIds.has(key(target, x.name)));
       const invName = declaredInverse?.name ?? f.inverseName ?? t.name;
       const pos = declaredInverse ? spec.tables.find((x) => x.name === target)!.fields.indexOf(declaredInverse) * 2 : 999;
       const inv = await insertField(target, { name: invName, type: "link" }, { linkedTableId: tableIds.get(t.name)!, inverseFieldId: row.id }, pos);
+      linkTarget.set(key(target, invName), t.name);
       await tx.update(baseFields).set({ options: { linkedTableId: tableIds.get(target)!, inverseFieldId: inv.id, singleRecord: f.singleRecord } }).where(eq(baseFields.id, row.id));
     }
     // 4. Seed records (plain values), remembering primary text → id for link resolution.
@@ -90,9 +97,11 @@ export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec) {
     }
     // 5. Link values by primary text (both sides kept in sync).
     for (const t of spec.tables) for (const [ri, r] of (t.records ?? []).entries()) {
-      for (const f of t.fields.filter((x) => x.type === "link" && r[x.name] !== undefined)) {
+      // Declared links plus auto-created inverse links (seed data may set either side).
+      const linkKeys = Object.keys(r).filter((k) => linkTarget.has(key(t.name, k)));
+      for (const f of linkKeys.map((k) => ({ name: k, linkTo: linkTarget.get(key(t.name, k))! }))) {
         const titles = (Array.isArray(r[f.name]) ? r[f.name] as string[] : [r[f.name] as string]).map(String);
-        const ids = titles.map((ti) => byTitle.get(f.linkTo!)?.get(ti)).filter(Boolean) as string[];
+        const ids = titles.map((ti) => byTitle.get(f.linkTo)?.get(ti)).filter(Boolean) as string[];
         if (!ids.length) continue;
         const recId = byTitle.get(t.name)!.get(String(r[t.fields[0].name] ?? ""))!;
         const fid = fieldIds.get(key(t.name, f.name))!;
@@ -113,10 +122,10 @@ export async function createBaseFromSpec(ctx: Ctx, spec: BaseSpec) {
       const tid = tableIds.get(t.name)!;
       let opts: FieldOptions = { ...(f.options ?? {}) };
       if (f.type !== "formula") {
-        const link = t.fields.find((x) => x.name === f.via && x.type === "link");
-        if (!link) throw invalid(`${t.name}.${f.name}: “via” must name a link field`);
-        opts.linkFieldId = fieldIds.get(key(t.name, link.name));
-        if (f.type !== "count") opts.targetFieldId = fieldIds.get(key(link.linkTo!, f.target ?? ""));
+        const linked = f.via ? linkTarget.get(key(t.name, f.via)) : undefined;
+        if (!linked) throw invalid(`${t.name}.${f.name}: “via” must name a link field`);
+        opts.linkFieldId = fieldIds.get(key(t.name, f.via!));
+        if (f.type !== "count") opts.targetFieldId = fieldIds.get(key(linked, f.target ?? ""));
         if (f.type === "rollup") opts.rollupFn = (f.fn as FieldOptions["rollupFn"]) ?? "sum";
       } else opts.formula = f.formula;
       opts = await validateComputed(tx, tid, f.type, opts);

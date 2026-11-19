@@ -25,7 +25,7 @@ export async function baseAccess(ctx: Ctx, baseId: string, tx: DbOrTx = db): Pro
   return { base: b, role };
 }
 
-export function require(access: { role: string }, min: string, what = "do that") {
+export function requireRole(access: { role: string }, min: string, what = "do that") {
   if (!atLeast(access.role, min)) throw forbidden(`You need ${min} access to ${what}.`);
 }
 

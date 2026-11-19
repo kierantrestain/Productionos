@@ -10,7 +10,7 @@ import { FormulaError, parse, references, toStored } from "@/lib/platform/formul
 import type { Ctx } from "../auth/context";
 import { audit } from "../audit";
 import { forbidden, invalid, notFound } from "../errors";
-import { atLeast, baseAccess, rank, require } from "./access";
+import { atLeast, baseAccess, rank, requireRole } from "./access";
 
 type Tx = DbOrTx;
 const now = () => new Date();
@@ -44,7 +44,7 @@ export async function createBase(ctx: Ctx, input: { name: string; icon?: string;
 }
 
 export async function updateBase(ctx: Ctx, baseId: string, patch: { name?: string; icon?: string; color?: string; description?: string | null }) {
-  const a = await baseAccess(ctx, baseId); require(a, "creator", "change this base");
+  const a = await baseAccess(ctx, baseId); requireRole(a, "creator", "change this base");
   const set: Record<string, unknown> = { updatedAt: now() };
   if (patch.name !== undefined) { if (!patch.name.trim()) throw invalid("Name the base."); set.name = patch.name.trim().slice(0, 120); }
   if (patch.icon) set.icon = patch.icon.slice(0, 40);
@@ -55,7 +55,7 @@ export async function updateBase(ctx: Ctx, baseId: string, patch: { name?: strin
 }
 
 export async function archiveBase(ctx: Ctx, baseId: string) {
-  const a = await baseAccess(ctx, baseId); require(a, "owner", "delete this base");
+  const a = await baseAccess(ctx, baseId); requireRole(a, "owner", "delete this base");
   await db.update(bases).set({ archivedAt: now() }).where(eq(bases.id, baseId));
   await audit(db, ctx, "delete_base", "bases", baseId, { meta: { name: a.base.name } });
 }
@@ -102,7 +102,7 @@ export async function createTableTx(tx: Tx, ctx: Ctx, baseId: string, name: stri
 }
 
 export async function createTable(ctx: Ctx, baseId: string, name: string) {
-  const a = await baseAccess(ctx, baseId); require(a, "creator", "add tables");
+  const a = await baseAccess(ctx, baseId); requireRole(a, "creator", "add tables");
   return db.transaction(async (tx) => {
     const t = await createTableTx(tx, ctx, baseId, name.trim() || "Untitled table");
     for (let i = 0; i < 3; i++) await insertBlankRecord(tx, ctx, t.id);
@@ -112,7 +112,7 @@ export async function createTable(ctx: Ctx, baseId: string, name: string) {
 }
 
 export async function updateTable(ctx: Ctx, tableId: string, patch: { name?: string; description?: string | null; permissions?: { create?: string; edit?: string; delete?: string }; primaryFieldId?: string }) {
-  const { table, access } = await tableContext(ctx, tableId); require(access, "creator", "change this table");
+  const { table, access } = await tableContext(ctx, tableId); requireRole(access, "creator", "change this table");
   const set: Record<string, unknown> = { updatedAt: now() };
   if (patch.name !== undefined) { if (!patch.name.trim()) throw invalid("Name the table."); set.name = patch.name.trim().slice(0, 120); }
   if (patch.description !== undefined) set.description = patch.description;
@@ -127,7 +127,7 @@ export async function updateTable(ctx: Ctx, tableId: string, patch: { name?: str
 }
 
 export async function archiveTable(ctx: Ctx, tableId: string) {
-  const { table, access } = await tableContext(ctx, tableId); require(access, "creator", "delete tables");
+  const { table, access } = await tableContext(ctx, tableId); requireRole(access, "creator", "delete tables");
   await db.transaction(async (tx) => {
     // Remove link fields in other tables that point here, so no dangling relations remain.
     const inbound = await tx.select().from(baseFields).where(and(eq(baseFields.orgId, ctx.orgId), eq(baseFields.type, "link"), sql`${baseFields.options} ->> 'linkedTableId' = ${tableId}`, isNull(baseFields.archivedAt)));
@@ -181,7 +181,7 @@ export async function validateComputed(tx: Tx, tableId: string, type: FieldType,
 }
 
 export async function createField(ctx: Ctx, tableId: string, input: { name: string; type: FieldType; options?: FieldOptions; description?: string | null; afterFieldId?: string }) {
-  const { table, access } = await tableContext(ctx, tableId); require(access, "creator", "add fields");
+  const { table, access } = await tableContext(ctx, tableId); requireRole(access, "creator", "add fields");
   if (!FIELD_TYPES.includes(input.type)) throw invalid("Unknown field type.");
   const name = input.name?.trim(); if (!name) throw invalid("Name the field.");
   return db.transaction(async (tx) => {
@@ -219,7 +219,7 @@ async function renumberFields(tx: Tx, tableId: string) {
 export async function updateField(ctx: Ctx, fieldId: string, patch: { name?: string; type?: FieldType; options?: FieldOptions; description?: string | null; permissions?: { edit?: string; hiddenBelow?: string } }) {
   const [cur] = await db.select().from(baseFields).where(and(eq(baseFields.id, fieldId), eq(baseFields.orgId, ctx.orgId), isNull(baseFields.archivedAt))).limit(1);
   if (!cur) throw notFound("Field not found.");
-  const { table, access } = await tableContext(ctx, cur.tableId); require(access, "creator", "change fields");
+  const { table, access } = await tableContext(ctx, cur.tableId); requireRole(access, "creator", "change fields");
   return db.transaction(async (tx) => {
     const set: Record<string, unknown> = { updatedAt: now(), version: cur.version + 1 };
     if (patch.name !== undefined) {
@@ -268,7 +268,7 @@ export async function updateField(ctx: Ctx, fieldId: string, patch: { name?: str
 export async function archiveField(ctx: Ctx, fieldId: string) {
   const [cur] = await db.select().from(baseFields).where(and(eq(baseFields.id, fieldId), eq(baseFields.orgId, ctx.orgId), isNull(baseFields.archivedAt))).limit(1);
   if (!cur) throw notFound("Field not found.");
-  const { table, access } = await tableContext(ctx, cur.tableId); require(access, "creator", "delete fields");
+  const { table, access } = await tableContext(ctx, cur.tableId); requireRole(access, "creator", "delete fields");
   if (table.primaryFieldId === fieldId) throw invalid("The primary field can't be deleted. Make another field primary first.");
   await db.transaction(async (tx) => {
     const ids = [fieldId];
@@ -283,7 +283,7 @@ export async function archiveField(ctx: Ctx, fieldId: string) {
 }
 
 export async function reorderFields(ctx: Ctx, tableId: string, orderedIds: string[]) {
-  const { access } = await tableContext(ctx, tableId); require(access, "creator", "reorder fields");
+  const { access } = await tableContext(ctx, tableId); requireRole(access, "creator", "reorder fields");
   await db.transaction(async (tx) => { for (const [i, id] of orderedIds.entries()) await tx.update(baseFields).set({ sortOrder: i * 2 }).where(and(eq(baseFields.id, id), eq(baseFields.tableId, tableId))); });
 }
 
@@ -293,7 +293,7 @@ const VIEW_TYPES = ["grid", "kanban", "calendar", "gallery", "form", "timeline",
 
 export async function createView(ctx: Ctx, tableId: string, input: { name: string; type: string; personal?: boolean; copyFromViewId?: string }) {
   const { access } = await tableContext(ctx, tableId);
-  if (input.personal) require(access, "commenter", "create personal views"); else require(access, "creator", "create collaborative views");
+  if (input.personal) requireRole(access, "commenter", "create personal views"); else requireRole(access, "creator", "create collaborative views");
   if (!VIEW_TYPES.includes(input.type as never)) throw invalid("Unknown view type.");
   let config: ViewConfig = {};
   if (input.copyFromViewId) { const [src] = await db.select().from(baseViews).where(and(eq(baseViews.id, input.copyFromViewId), eq(baseViews.tableId, tableId))).limit(1); if (src) config = src.config; }
@@ -337,13 +337,13 @@ export async function updateView(ctx: Ctx, viewId: string, patch: { name?: strin
   const { view, access } = await viewContext(ctx, viewId);
   const set: Record<string, unknown> = { updatedAt: now() };
   if (patch.isLocked !== undefined || patch.visibleTo !== undefined) {
-    require(access, "creator", "change view permissions");
+    requireRole(access, "creator", "change view permissions");
     if (view.ownerUserId) throw invalid("Personal views can't be locked or restricted.");
     if (patch.isLocked !== undefined) set.isLocked = patch.isLocked;
     if (patch.visibleTo !== undefined) { if (patch.visibleTo && !rank(patch.visibleTo)) throw invalid("Unknown role"); set.visibleTo = patch.visibleTo; }
   }
-  if (patch.name !== undefined) { if (!view.ownerUserId) require(access, "creator", "rename shared views"); set.name = patch.name.trim().slice(0, 120) || view.name; }
-  if (patch.share !== undefined) { require(access, "creator", "share views"); set.shareToken = patch.share ? (view.shareToken ?? randomBytes(18).toString("base64url")) : null; }
+  if (patch.name !== undefined) { if (!view.ownerUserId) requireRole(access, "creator", "rename shared views"); set.name = patch.name.trim().slice(0, 120) || view.name; }
+  if (patch.share !== undefined) { requireRole(access, "creator", "share views"); set.shareToken = patch.share ? (view.shareToken ?? randomBytes(18).toString("base64url")) : null; }
   const [row] = await db.update(baseViews).set(set).where(eq(baseViews.id, viewId)).returning();
   await audit(db, ctx, "update_view", "base_views", viewId, { after: set as never });
   return row;
@@ -351,7 +351,7 @@ export async function updateView(ctx: Ctx, viewId: string, patch: { name?: strin
 
 export async function archiveView(ctx: Ctx, viewId: string) {
   const { view, access } = await viewContext(ctx, viewId);
-  if (!view.ownerUserId) require(access, "creator", "delete shared views");
+  if (!view.ownerUserId) requireRole(access, "creator", "delete shared views");
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(baseViews).where(and(eq(baseViews.tableId, view.tableId), isNull(baseViews.archivedAt), isNull(baseViews.ownerUserId)));
   if (!view.ownerUserId && n <= 1) throw invalid("A table needs at least one shared view.");
   await db.update(baseViews).set({ archivedAt: now() }).where(eq(baseViews.id, viewId));

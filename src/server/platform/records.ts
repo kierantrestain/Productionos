@@ -9,7 +9,7 @@ import { COLORS, coerceValue, isComputed, type FieldDefLite, type FieldOptions, 
 import type { Ctx } from "../auth/context";
 import { audit, emit } from "../audit";
 import { forbidden, invalid, notFound } from "../errors";
-import { atLeast, fieldEditable, fieldVisible, require } from "./access";
+import { atLeast, fieldEditable, fieldVisible, requireRole } from "./access";
 import { tableContext } from "./schema";
 
 type Tx = DbOrTx;
@@ -59,7 +59,7 @@ async function nextAutonumber(tx: Tx, tableId: string) {
 export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], opts: { tx?: Tx; afterRecordId?: string; origin?: "user" | "import" | "system"; skipPermission?: boolean } = {}) {
   const run = async (tx: Tx) => {
     const { table, access } = await tableContext(ctx, tableId, tx);
-    if (!opts.skipPermission) { require(access, table.permissions?.create ?? "editor", "add records to this table"); }
+    if (!opts.skipPermission) { requireRole(access, table.permissions?.create ?? "editor", "add records to this table"); }
     const role = opts.skipPermission ? "owner" : access.role;
     const fields = await fieldsOf(tx, tableId);
     let base = 0;
@@ -88,7 +88,7 @@ export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, op
     if (!cur) throw notFound("Record not found.");
     if (opts.expectedVersion !== undefined && cur.version !== opts.expectedVersion) throw invalid("This record changed while you were editing. Your view has been refreshed.");
     const { table, access } = await tableContext(ctx, cur.tableId, tx);
-    require(access, table.permissions?.edit ?? "editor", "edit records in this table");
+    requireRole(access, table.permissions?.edit ?? "editor", "edit records in this table");
     const fields = await fieldsOf(tx, cur.tableId);
     const vals = preparePatch(access.role, fields, patch);
     await assertLinkTargets(tx, fields, vals);
@@ -121,7 +121,7 @@ export async function deleteRecords(ctx: Ctx, ids: string[], restore = false) {
     const recs = await tx.select().from(baseRecords).where(and(eq(baseRecords.orgId, ctx.orgId), inArray(baseRecords.id, ids), restore ? isNotNull(baseRecords.deletedAt) : isNull(baseRecords.deletedAt)));
     for (const r of recs) {
       const { table, access } = await tableContext(ctx, r.tableId, tx);
-      require(access, table.permissions?.delete ?? "editor", "delete records in this table");
+      requireRole(access, table.permissions?.delete ?? "editor", "delete records in this table");
       const fields = await fieldsOf(tx, r.tableId);
       // Deleting removes this record from the other side of its links; restoring puts it back.
       for (const f of fields.filter((x) => x.type === "link")) { const linked = (r.data[f.id] as string[]) ?? []; await syncInverse(tx, f, r.id, restore ? [] : linked, restore ? linked : []); }
@@ -139,7 +139,7 @@ export async function setRowColor(ctx: Ctx, ids: string[], color: string | null)
     const [r] = await db.select().from(baseRecords).where(and(eq(baseRecords.id, id), eq(baseRecords.orgId, ctx.orgId))).limit(1);
     if (!r) continue;
     const { table, access } = await tableContext(ctx, r.tableId);
-    require(access, table.permissions?.edit ?? "editor", "colour records");
+    requireRole(access, table.permissions?.edit ?? "editor", "colour records");
     await db.update(baseRecords).set({ rowColor: color }).where(eq(baseRecords.id, id));
   }
 }
@@ -148,7 +148,7 @@ export async function setRowColor(ctx: Ctx, ids: string[], color: string | null)
 export async function moveRecord(ctx: Ctx, recordId: string, beforeId: string | null, afterId: string | null) {
   const [r] = await db.select().from(baseRecords).where(and(eq(baseRecords.id, recordId), eq(baseRecords.orgId, ctx.orgId))).limit(1);
   if (!r) throw notFound();
-  const { access } = await tableContext(ctx, r.tableId); require(access, "editor", "reorder records");
+  const { access } = await tableContext(ctx, r.tableId); requireRole(access, "editor", "reorder records");
   const get = async (id: string | null) => (id ? (await db.select({ s: baseRecords.sortOrder }).from(baseRecords).where(eq(baseRecords.id, id)).limit(1))[0]?.s ?? null : null);
   const [b, a] = [await get(beforeId), await get(afterId)];
   const s = b !== null && a !== null ? (b + a) / 2 : b !== null ? b + 1 : a !== null ? a - 1 : r.sortOrder;
