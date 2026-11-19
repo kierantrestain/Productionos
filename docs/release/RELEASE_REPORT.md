@@ -1,4 +1,16 @@
-# Release report: Production OS v0.1.0 (19 Nov 2026)
+# Release report: Production OS v0.2.0 (19 Nov 2026)
+
+## Update: v0.2.0 (customisation release, deployed)
+
+* **Live:** https://production-os-peach.vercel.app (Vercel project `production-os`, Neon PostgreSQL, file storage in Postgres via `STORAGE_PROVIDER=db`). Migrations apply on each deploy; `/api/health` reports DB status and the migration count.
+* **First run:** `/setup` creates the first organisation and admin, then locks itself.
+* **New:** production templates and wizard (12 types plus organisation-saved), custom fields, terminology, extensible option lists, organisation settings that drive approval limits/VAT/currency/call sheets, a no-code automation rule builder, a Command Centre attention list, a live KPI board, a weighted sales pipeline, stripboard page/time totals, checkout status logic, and location-booking clashes.
+* **Defects found and fixed in this release:** an over-broad `.gitignore` excluded the storage module from clean builds; workflow transitions didn't emit change events; rules evaluated latest instead of point-in-time state; a single-batch outbox drain let bulk operations starve automations (now drains in batches, with a regression test); and a weak E2E assertion was masking the last of these (tightened).
+* **Verified:** typecheck and lint clean; 45/45 integration tests (8 files); 12/12 Playwright tests on two consecutive runs; production build.
+
+---
+
+## Original release notes (v0.1.0)
 
 ## 1. Deployment status
 

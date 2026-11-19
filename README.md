@@ -2,7 +2,7 @@
 
 One independent production operating system for film, television, documentary, commercial and studio formats (panel shows, gameshows, podcasts). It consolidates the **Ovation OS** (68 tables) and **S’appening Production** (22 tables) Airtable bases into a single relational platform. It is not an Airtable clone.
 
-> **Status (19 Nov 2026):** the application, database, workflows and tests are built and verified locally against PostgreSQL 16. **Not deployed** and **live Airtable migration not run**: this build environment has no Vercel, Neon or Airtable credentials, and those hosts are network-blocked. See [`docs/release/RELEASE_REPORT.md`](docs/release/RELEASE_REPORT.md).
+> **Status (19 Nov 2026):** deployed on Vercel at **https://production-os-peach.vercel.app**, backed by Neon PostgreSQL. Migrations run automatically on every deploy. The first visit opens a one-time setup screen that creates your organisation and admin (optionally with a clearly flagged demo workspace). **Live Airtable migration has not run**: it needs a read-only Airtable token (see `docs/MIGRATION.md`).
 
 ## Stack
 
@@ -18,6 +18,19 @@ One independent production operating system for film, television, documentary, c
 ## Workspaces
 
 Command Centre · Slate & IP · Productions/Seasons/Episodes · Scenes, Segments & Shot Lists · Schedule & Shoot-Day Command · Cast, Crew & Talent · Locations & Resources · Budgets & Approvals · Post & Delivery · Rights & Contracts · Commercial & Distribution · Operations & Automations. Admin & Migration and a personal *My schedule* for cast/crew sit alongside these.
+
+## Make it yours (no code)
+
+Organisation admins can tailor everything under **Customise** and **Automations**:
+
+| Capability | What it does |
+|---|---|
+| **Production templates** | *New production* offers 12 types: feature film, scripted series, documentary, commercial, music video, studio gameshow, panel show, podcast, live event, corporate, reality and blank. A template builds the episodes or units, the running order, a budget top sheet (categories only), deliverables, the post pipeline and dated kickoff tasks. **Save as template** turns any production into your own reusable format. |
+| **Terminology** | Rename record types organisation-wide (Scenes → Items) or per production (Running order, Rounds, Story beats, Set-ups). |
+| **Custom fields** | Add text, number, money, date, yes/no, choice or link fields to any record type. They appear in forms, grid columns (inline-editable), filters and exports, and can be required on creation. |
+| **Option lists** | Add your own choices to drop-downs (segment types, departments, categories). Status lists that drive approvals, delivery and conflicts stay locked. |
+| **Defaults & approvals** | Currency, timezone, default VAT, the spend limits for PM, producer and executive approval, and the call-sheet contact policy. All of these change server-side behaviour, not just labels. |
+| **Automation rules** | "When *record* *field* becomes *value* → create a task / set a field". Rules run with their creator's permissions, are idempotent per event, are evaluated at the moment of change, and are loop-guarded. |
 
 ## Run locally
 
