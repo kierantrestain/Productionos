@@ -16,16 +16,17 @@ import { BASE_ICONS, BaseIcon } from "./icons";
 import { ImportDialog } from "./import-dialog";
 import { AiBuilderDialog } from "./ai-builder";
 import { AppsSection, type AppCard, type AppTpl } from "@/components/apps/apps-home";
+import { TodayStrip } from "@/components/hub/today-strip";
 
 type BaseCard = { id: string; name: string; icon: string; color: string; role: string; updatedAt: string };
 type Tpl = { key: string; name: string; description: string; category: string; icon: string; color: string };
 
-export function HomeView({ bases, templates, canCreate, loadDemo, apps = [], appTemplates = [], startNew, attention }: { bases: BaseCard[]; templates: Tpl[]; canCreate: boolean; loadDemo: boolean; apps?: AppCard[]; appTemplates?: AppTpl[]; startNew?: boolean; attention?: React.ReactNode }) {
+export function HomeView({ bases, templates, canCreate, loadDemo, apps = [], appTemplates = [], startNew, showToday }: { bases: BaseCard[]; templates: Tpl[]; canCreate: boolean; loadDemo: boolean; apps?: AppCard[]; appTemplates?: AppTpl[]; startNew?: boolean; showToday?: boolean }) {
   const [dialog, setDialog] = useState<null | "blank" | "templates" | "import" | "ai">(startNew && canCreate ? "blank" : null);
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1280 }}>
       {loadDemo && <DemoLoader auto />}
-      {attention}
+      {showToday && <TodayStrip />}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
         <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, flex: 1 }}>Home</h1>
         {canCreate && <DropdownMenu button={{ label: "Create", variant: "primary", icon: <Plus size={16} /> }} alignment="end" items={[

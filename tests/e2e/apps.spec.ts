@@ -81,6 +81,7 @@ test.describe.serial("apps built with the no-code builder", () => {
     await c.getByRole("button", { name: "Send request" }).click();
     await expect(c.getByText("Thanks — your account manager has it.")).toBeVisible();
     await c.goto("/production"); await expect(c).not.toHaveURL(/\/production/);
+    for (const path of ["/workspace/members", "/my-work", "/templates", "/workspace/settings"]) { await c.goto(path); await expect(c).toHaveURL(/\/a\//); } // portal visitors never see workspace pages
     const res = await c.request.get("/templates"); expect(res.status()).toBeLessThan(500);
     await c.waitForLoadState("networkidle"); await c.goto(crmUrl); await expect(c.getByText(/not found|could not be found/i)).toBeVisible();
     await c.context().close();

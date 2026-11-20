@@ -57,6 +57,8 @@ export function BaseApp({ data }: { data: BaseData }) {
 
   useEffect(() => { setRows(data.rows); setCounts(data.commentCounts); setConfig(data.view.config); }, [data]);
   useEffect(() => { if (window.innerWidth < 800) setSidebar(false); }, []);
+  // Canonical URL (/base/<base>/<table>/<view>) without a server redirect.
+  useEffect(() => { const want = `/base/${data.base.id}/${data.table.id}/${data.view.id}`; if (window.location.pathname !== want) window.history.replaceState(window.history.state, "", want + window.location.search); }, [data.base.id, data.table.id, data.view.id]);
   const notify = useCallback((msg: string, undo?: () => void) => {
     clearTimeout(toastTimer.current); setToast({ msg, undo });
     toastTimer.current = setTimeout(() => setToast(null), undo ? 8000 : 3500);

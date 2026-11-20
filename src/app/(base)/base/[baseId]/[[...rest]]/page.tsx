@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { memberships, users } from "@/db/schema";
@@ -22,12 +22,11 @@ export default async function BasePage({ params }: { params: Promise<{ baseId: s
   const base = st.access.base;
   if (!st.tables.length) return <div style={{ padding: 40 }}>This base has no tables.</div>;
   const [tableId, viewId] = rest;
-  const table = st.tables.find((t) => t.id === tableId);
-  if (!table) redirect(`/base/${baseId}/${st.tables[0].id}`);
+  // Unknown or missing table/view ids render the defaults (no server redirect mid-stream); the client tidies the URL.
+  const table = st.tables.find((t) => t.id === tableId) ?? st.tables[0];
   const tViews = st.views.filter((v) => v.tableId === table.id);
   const view = tViews.find((v) => v.id === viewId) ?? tViews[0];
   if (!view) return <div style={{ padding: 40 }}>No views are visible to you in this table.</div>;
-  if (!viewId) redirect(`/base/${baseId}/${table.id}/${view.id}`);
 
   const result = await runView(ctx, role, table.id, view.config, { limit: 1000 });
   const counts = await commentCounts(ctx, result.rows.map((r) => r.id));

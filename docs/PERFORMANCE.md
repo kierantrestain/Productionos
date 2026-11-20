@@ -30,3 +30,25 @@ groups and search always run across **all** matching rows on the server.
 - Search over 100,000 rows takes ~2.6 s.
 - Hosted (Neon, eu-west-2) latency adds network round-trips; not benchmarked here because the
   script refuses to write test data to production.
+
+## Large-table engine (SQL fast path)
+
+Tables with ≥ `FAST_VIEW_MIN_ROWS` records (default 3,000) filter, sort, search and page **in Postgres**;
+formulas, lookups and rollups are then computed only for the rows on the page. Record-specific reads
+(detail pages, agents, automation checks) load only those records. Dashboard KPIs and charts grouped by
+a single select are aggregated in SQL. Anything SQL can't reproduce exactly (sorting by a formula, a
+date bucketed chart, a self-linked table) falls back to the in-memory engine, so results never change —
+`tests/integration/capacity.test.ts` checks the SQL path returns identical ids, order and counts for every
+supported filter/sort operator.
+
+Measured locally (`pnpm tsx scripts/bench-views.ts 50000 100000 200000`, page 500, median of 3, ms):
+
+| Rows | Single record | Grid page | Filter (select + number) | Sort (number) | Search | Sort by formula (in-memory fallback) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 50,000 | 19 | 30 | 51 | 55 | — | 561 |
+| 100,000 | 28 | 44 | 74 | 77 | 569 | 1,239 |
+| 200,000 | 39 | 68 | 129 | 128 | 976 | 2,997 |
+
+Before this change a 100,000-row grid page took ~830 ms and search ~2.4 s; 200,000-row search took ~5 s.
+Large-table search covers stored values, select names, people and linked records' names among the
+fields the viewer can see; formula/lookup results are searched on smaller tables only.

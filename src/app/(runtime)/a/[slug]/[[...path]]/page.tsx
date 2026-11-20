@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { requirePageContext } from "@/server/auth/request";
 import { canSee, findPage, listApps, resolveRuntime, visiblePages, type Runtime } from "@/server/apps/apps";
 import { assertRecordInScope, componentData, type ComponentData } from "@/server/apps/data";
@@ -18,7 +18,7 @@ export default async function AppRuntimePage({ params, searchParams }: { params:
   try { rt = await resolveRuntime(ctx, slug, preview); } catch { notFound(); }
   const [pageSlug, recordId] = path;
   const page = findPage(rt, pageSlug) as Page | undefined;
-  if (!page) { if (!pageSlug) notFound(); redirect(`/a/${slug}${preview ? "?preview=1" : ""}`); }
+  if (!page) notFound(); // a renamed/removed page: the not-found screen links back to the app
   if (page.kind === "detail") {
     if (!recordId) notFound();
     try { await assertRecordInScope({ ctx, rt, page }, page.tableId!, recordId); } catch { notFound(); }

@@ -15,7 +15,7 @@ import { cellText } from "@/lib/platform/cell-text";
 import type { Component, DataBinding, Page } from "@/lib/apps/types";
 import type { Ctx } from "../auth/context";
 import { forbidden, invalid } from "../errors";
-import { runView, type ViewRow } from "../platform/query";
+import { aggregateLarge, runView, type ViewRow } from "../platform/query";
 import { listComments } from "../platform/records";
 import type { Runtime } from "./apps";
 
@@ -109,11 +109,25 @@ export async function componentData(c: Ctx2, comp: Component): Promise<Component
     switch (comp.type) {
       case "kpi": case "progress": {
         if (!p.data?.tableId) return { kind: "none" };
+        { const eq = await effectiveQuery(c, p.data); if (!eq.recordIds) { const a = await aggregateLarge(c.ctx, viewRole(c.rt.role), eq.table.id, eq.vc, { agg: p.agg, fieldId: p.fieldId }); if (a && "value" in a) return { kind: "kpi", value: a.value, count: a.count }; } }
         const q = await query(c, p.data);
         return { kind: "kpi", value: aggregate(q.rows, p.agg, p.fieldId), count: q.rows.length };
       }
       case "chart": {
         if (!p.data?.tableId || !p.groupFieldId) return { kind: "none" };
+        {
+          const eq = await effectiveQuery(c, p.data);
+          if (!eq.recordIds) {
+            const a = await aggregateLarge(c.ctx, viewRole(c.rt.role), eq.table.id, eq.vc, { agg: p.agg, fieldId: p.fieldId, groupFieldId: p.groupFieldId });
+            if (a && "groups" in a) {
+              const [gf] = (await runView(c.ctx, viewRole(c.rt.role), eq.table.id, {}, { recordIds: [] })).fields.filter((f) => f.id === p.groupFieldId);
+              const choices = (gf?.options.choices ?? []) as { id: string; name: string; color?: string }[];
+              const series = a.groups.map((x) => { const ch = choices.find((y) => y.id === x.key); return { label: ch?.name ?? (x.key ? "" : "(Empty)"), value: x.value, color: ch?.color, key: ch?.id }; })
+                .sort((x, y) => (choices.findIndex((ch) => ch.name === x.label) + 1 || 999) - (choices.findIndex((ch) => ch.name === y.label) + 1 || 999)).slice(0, 40);
+              return { kind: "series", series, drillFieldId: p.groupFieldId };
+            }
+          }
+        }
         const q = await query(c, p.data);
         const g = q.fields.find((f) => f.id === p.groupFieldId);
         if (!g) return { kind: "error", message: "The group-by field is missing or hidden from you." };

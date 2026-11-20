@@ -152,7 +152,9 @@ test.describe.serial("usability", () => {
     await page.keyboard.press("Escape");
     await page.keyboard.press("Control+k");
     await page.getByRole("combobox", { name: "Search" }).fill("settings");
-    await page.getByRole("option", { name: /^Settings/ }).click();
+    const opt = page.getByRole("option", { name: /^Settings/ });
+    await expect(opt).toBeVisible(); await expect(page.getByText("Searching…")).toHaveCount(0);
+    await opt.click();
     await expect(page).toHaveURL(/\/workspace\/settings/);
   });
 

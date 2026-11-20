@@ -43,7 +43,9 @@ export async function myWork(ctx: Ctx, opts: { maxTables?: number; mentionsSince
       if (!userFs.length && !dueF) continue;
       scanned++;
       const statusF = fs.find((f) => f.type === "singleSelect" && /status|stage|state/i.test(f.name));
-      const r = await runView(ctx, b.role === "portal" ? "reader" : b.role, t.id, {});
+      // Ask only for rows that can matter (assigned to me, overdue, or due within a week) — large tables stay fast.
+      const conds = [...userFs.map((f) => ({ fieldId: f.id, op: "hasAnyOf", value: [ctx.userId] })), ...(dueF ? [{ fieldId: dueF.id, op: "isBefore", value: "today" }, { fieldId: dueF.id, op: "isWithinNextDays", value: 7 }] : [])];
+      const r = await runView(ctx, b.role === "portal" ? "reader" : b.role, t.id, { filters: { conjunction: "or", conditions: conds } }, { limit: 500 });
       const primary = r.fields.find((f) => f.id === t.primaryFieldId) ?? r.fields[0];
       for (const row of r.rows) {
         const sv = statusF ? row.values[statusF.id] : undefined;

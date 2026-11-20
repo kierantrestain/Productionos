@@ -24,12 +24,13 @@ export function MyWorkView({ name, data }: { name: string; data: Data }) {
   const list = useMemo(() => data.items.filter(TABS.find((t) => t.key === tab)!.match), [data.items, tab]);
   const groups = useMemo(() => { const m = new Map<string, WorkItem[]>(); for (const i of list) { const k = `${i.baseName} › ${i.tableName}`; m.set(k, [...(m.get(k) ?? []), i]); } return [...m.entries()]; }, [list]);
   const c = data.counts;
-  useEffect(() => { markMentionsSeen(); }, []);
+  const [hello, setHello] = useState("Hello");
+  useEffect(() => { markMentionsSeen(); setHello(greet()); }, []);
   return (
     <div className="mw">
       <header className="mw-head">
         <Briefing />
-        <div><h1>{greet()}, {name}</h1><p>{c.overdue + c.today + c.approvals ? `${c.overdue} overdue, ${c.today} due today and ${c.approvals} approval${c.approvals === 1 ? "" : "s"} waiting on you.` : "Nothing urgent. Here's what's coming up."}{c.mentions ? ` ${c.mentions} mention${c.mentions === 1 ? "" : "s"} in the last 30 days.` : ""}</p></div>
+        <div><h1>{hello}, {name}</h1><p>{c.overdue + c.today + c.approvals ? `${c.overdue} overdue, ${c.today} due today and ${c.approvals} approval${c.approvals === 1 ? "" : "s"} waiting on you.` : "Nothing urgent. Here's what's coming up."}{c.mentions ? ` ${c.mentions} mention${c.mentions === 1 ? "" : "s"} in the last 30 days.` : ""}</p></div>
       </header>
       <div className="mw-stats">
         <Stat icon={<AlertTriangle size={18} />} tone="red" label="Overdue" n={c.overdue} onClick={() => setTab("focus")} />

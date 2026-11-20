@@ -70,15 +70,17 @@ async function main() {
     const filtered = await time(() => runView(ctx, "owner", tid, { filters: { conjunction: "and", conditions: [{ fieldId: stage.id, op: "is", value: won }, { fieldId: F("Deals", "Amount").id, op: ">", value: 5000 }] } }, { limit: PAGE }));
     const sorted = await time(() => runView(ctx, "owner", tid, { sorts: [{ fieldId: F("Deals", "Amount").id, dir: "desc" }] }, { limit: PAGE }));
     const sortedFormula = await time(() => runView(ctx, "owner", tid, { sorts: [{ fieldId: F("Deals", "Weighted").id, dir: "desc" }] }, { limit: PAGE }));
+    const anyId = (await db.select({ id: baseRecords.id }).from(baseRecords).where(eq(baseRecords.tableId, tid)).limit(1))[0].id;
+    const one = await time(() => runView(ctx, "owner", tid, {}, { recordIds: [anyId] }));
     const search = await time(() => runView(ctx, "owner", tid, {}, { search: "Deal 4242", limit: PAGE }));
     // Grid initial page load = view + comment counts + serialised payload.
     const grid = await time(async () => { const v = await runView(ctx, "owner", tid, {}, { limit: PAGE }); const c = await commentCounts(ctx, v.rows.map((x) => x.id)); return JSON.stringify({ rows: v.rows, c }).length; });
-    results.push(`| ${n.toLocaleString("en-GB")} | ${seedMs} | ${full.ms} (${(fullBytes / 1048576).toFixed(1)} MB) | ${first.ms} | ${filtered.ms} (${filtered.out?.matched ?? "?"} match) | ${sorted.ms} | ${sortedFormula.ms} | ${search.ms} | ${grid.ms} | ${grid.out ? (grid.out / 1024).toFixed(0) : "?"} KB · ${first.out?.rows.length ?? "?"}/${first.out?.total ?? "?"} rows |`);
+    results.push(`| ${n.toLocaleString("en-GB")} | one record ${one.ms} | ${seedMs} | ${full.ms} (${(fullBytes / 1048576).toFixed(1)} MB) | ${first.ms} | ${filtered.ms} (${filtered.out?.matched ?? "?"} match) | ${sorted.ms} | ${sortedFormula.ms} | ${search.ms} | ${grid.ms} | ${grid.out ? (grid.out / 1024).toFixed(0) : "?"} KB · ${first.out?.rows.length ?? "?"}/${first.out?.total ?? "?"} rows |`);
     await db.delete(organisations).where(eq(organisations.id, org.id));
   }
   console.log(`\nPage size ${PAGE}. Median of 3 runs, milliseconds.\n`);
-  console.log("| Rows | Seed (insert) | Unpaged (before) | First page | Filtered (select + number) | Sorted (number) | Sorted (formula) | Search | Grid initial load | Payload |");
-  console.log("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
+  console.log("| Rows | Single record | Seed (insert) | Unpaged (before) | First page | Filtered (select + number) | Sorted (number) | Sorted (formula) | Search | Grid initial load | Payload |");
+  console.log("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|");
   for (const l of results) console.log(l);
   await closeDb();
 }
