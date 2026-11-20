@@ -48,10 +48,13 @@ export function BaseApp({ data }: { data: BaseData }) {
     toastTimer.current = setTimeout(() => setToast(null), undo ? 8000 : 3500);
   }, []);
 
-  const reload = useCallback(async (q = search) => {
-    const r = await loadViewAction(data.view.id, q);
-    if (r.ok) { setRows(r.data.rows); setCounts(r.data.commentCounts); } else notify(r.error);
-  }, [data.view.id, search, notify]);
+  const [limit, setLimit] = useState(1000);
+  const [matched, setMatched] = useState(data.matched);
+  useEffect(() => setMatched(data.matched), [data.matched]);
+  const reload = useCallback(async (q = search, lim = limit) => {
+    const r = await loadViewAction(data.view.id, q, lim);
+    if (r.ok) { setRows(r.data.rows); setCounts(r.data.commentCounts); setMatched(r.data.matched); } else notify(r.error);
+  }, [data.view.id, search, limit, notify]);
   useEffect(() => { const t = setTimeout(() => { if (search !== "") reload(search); }, 200); return () => clearTimeout(t); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fields in view order, minus hidden; primary always first.
@@ -205,6 +208,7 @@ export function BaseApp({ data }: { data: BaseData }) {
             onSearch={(s) => { setSearch(s); if (!s) reload(""); }} onConfig={onConfig} onToggleSidebar={() => setSidebar((s) => !s)}
             onExport={exportView} onShare={shareForm} canLock={data.can.collabViews && !data.view.personal}
             onLock={async () => { const r = await updateViewAction(data.view.id, { isLocked: !data.view.isLocked }); if (!r.ok) notify(r.error); else router.refresh(); }} notify={notify} />
+          {rows.length < matched && <div role="status" style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 12px", fontSize: 13, borderBottom: "1px solid var(--color-border)", background: "var(--color-background-muted)" }}>Showing {rows.length.toLocaleString("en-GB")} of {matched.toLocaleString("en-GB")} records. <button type="button" className="p-tbtn on-blue" onClick={() => { const l = limit + 5000; setLimit(l); reload(search, l); }}>Load {Math.min(5000, matched - rows.length).toLocaleString("en-GB")} more</button></div>}
           {view.type === "grid" && <Grid fields={fields} allFields={data.allFields} rows={rows} config={config} commentCounts={counts} collaborators={data.collaborators}
             can={{ create: data.can.create, edit: data.can.edit, delete: data.can.delete, schema: data.can.schema, viewEdit: data.view.canEdit }}
             onEdit={onEdit} onAddRow={(after, v) => create(v ?? {}, after)} onExpand={setRecordId} onDeleteRows={deleteRows} onDuplicate={duplicate}

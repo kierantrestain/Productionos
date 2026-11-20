@@ -192,7 +192,8 @@ export function matches(f: FieldDefLite, v: unknown, op: string, want: unknown, 
   return true;
 }
 
-function compare(f: FieldDefLite, a: unknown, b: unknown, ta: string, tb: string): number {
+const COLLATOR = new Intl.Collator("en-GB", { numeric: true, sensitivity: "base" });
+function compare(f: FieldDefLite, a: unknown, b: unknown, ta: () => string, tb: () => string): number {
   const ea = isEmpty(a) && a !== false, eb = isEmpty(b) && b !== false;
   if (ea || eb) return ea === eb ? 0 : ea ? 1 : -1; // empties last
   switch (f.type) {
@@ -202,13 +203,13 @@ function compare(f: FieldDefLite, a: unknown, b: unknown, ta: string, tb: string
     case "singleSelect": { const ch = f.options.choices ?? []; return ch.findIndex((c) => c.id === a) - ch.findIndex((c) => c.id === b); }
     case "rollup": case "formula": if (typeof a === "number" && typeof b === "number") return a - b; break;
   }
-  return ta.localeCompare(tb, "en-GB", { numeric: true, sensitivity: "base" });
+  return COLLATOR.compare(ta(), tb());
 }
 
 export interface ViewRow { id: string; values: Record<string, unknown>; color: string | null; autonumber: number; createdAt: string; updatedAt: string }
 
 /** Compute a table and apply a view. Fields hidden from the caller's role are removed from output. */
-export async function runView(ctx: Ctx, role: string, tableId: string, config: ViewConfig, opts: { search?: string; recordIds?: string[] } = {}) {
+export async function runView(ctx: Ctx, role: string, tableId: string, config: ViewConfig, opts: { search?: string; recordIds?: string[]; limit?: number; offset?: number } = {}) {
   const comp = new Computer(ctx);
   const st = await comp.compute(tableId);
   const names = await comp.users();
@@ -218,20 +219,25 @@ export async function runView(ctx: Ctx, role: string, tableId: string, config: V
   for (const f of st.fields.filter((x) => x.type === "link")) await comp.compute(f.options.linkedTableId!);
   let rows = st.records.filter((r) => !opts.recordIds || opts.recordIds.includes(r.id));
   const vals = (r: Rec) => st.values!.get(r.id)!;
+  // Display text is only needed for text-based ops/sorts; memoise it per row+field (it can be expensive).
+  const memo = new Map<string, string>();
+  const textOf = (f: FieldDefLite, r: Rec) => { const k = `${r.id}\u0000${f.id}`; let t = memo.get(k); if (t === undefined) { t = text(f, vals(r)[f.id]); memo.set(k, t); } return t; };
+  const TEXT_OPS = new Set(["contains", "doesNotContain", "is", "isNot"]);
   const conds = (config.filters?.conditions ?? []).filter((c) => st.fields.some((f) => f.id === c.fieldId));
   if (conds.length) {
     const now = new Date();
-    const test = (r: Rec) => conds.map((c) => { const f = st.fields.find((x) => x.id === c.fieldId)!; const v = vals(r)[f.id]; return matches(f, v, c.op, c.value, text(f, v), now); });
+    const byId = new Map(st.fields.map((f) => [f.id, f]));
+    const test = (r: Rec) => conds.map((c) => { const f = byId.get(c.fieldId)!; const v = vals(r)[f.id]; return matches(f, v, c.op, c.value, TEXT_OPS.has(c.op) ? textOf(f, r) : "", now); });
     rows = rows.filter((r) => (config.filters!.conjunction === "or" ? test(r).some(Boolean) : test(r).every(Boolean)));
   }
   if (opts.search?.trim()) {
     const q = opts.search.trim().toLowerCase();
-    rows = rows.filter((r) => visible.some((f) => text(f, vals(r)[f.id]).toLowerCase().includes(q)));
+    rows = rows.filter((r) => visible.some((f) => textOf(f, r).toLowerCase().includes(q)));
   }
   const sortKeys = [...(config.groups ?? []), ...(config.sorts ?? [])].map((s) => ({ ...s, f: st.fields.find((x) => x.id === s.fieldId) })).filter((s) => s.f) as { fieldId: string; dir: "asc" | "desc"; f: FieldDefLite }[];
   if (sortKeys.length) {
     rows = [...rows].sort((a, b) => {
-      for (const s of sortKeys) { const va = vals(a)[s.f.id], vb = vals(b)[s.f.id]; const c = compare(s.f, va, vb, text(s.f, va), text(s.f, vb)); if (c) return s.dir === "desc" ? -c : c; }
+      for (const s of sortKeys) { const va = vals(a)[s.f.id], vb = vals(b)[s.f.id]; const c = compare(s.f, va, vb, () => textOf(s.f, a), () => textOf(s.f, b)); if (c) return s.dir === "desc" ? -c : c; }
       return a.sortOrder - b.sortOrder;
     });
   }
@@ -241,12 +247,14 @@ export async function runView(ctx: Ctx, role: string, tableId: string, config: V
     if (c?.mode === "conditions") { for (const rule of c.rules ?? []) { const f = st.fields.find((x) => x.id === rule.fieldId); if (f && matches(f, vals(r)[f.id], rule.op, rule.value, text(f, vals(r)[f.id]), new Date())) return rule.color; } }
     return r.rowColor;
   };
+  const matched = rows.length;
+  if (opts.limit !== undefined || opts.offset) rows = rows.slice(opts.offset ?? 0, (opts.offset ?? 0) + (opts.limit ?? rows.length));
   const out: ViewRow[] = rows.map((r) => {
     const v = vals(r); const shown: Record<string, unknown> = {};
     for (const f of visible) shown[f.id] = presentForClient(f, v[f.id], comp, names);
     return { id: r.id, values: shown, color: colorOf(r), autonumber: r.autonumber, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() };
   });
-  return { table: st.table, fields: visible, rows: out, total: st.records.length };
+  return { table: st.table, fields: visible, rows: out, total: st.records.length, matched };
 }
 
 /** Client-friendly cell shapes: links carry titles, users carry names. */

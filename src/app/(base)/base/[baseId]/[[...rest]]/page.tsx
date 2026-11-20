@@ -29,7 +29,7 @@ export default async function BasePage({ params }: { params: Promise<{ baseId: s
   if (!view) return <div style={{ padding: 40 }}>No views are visible to you in this table.</div>;
   if (!viewId) redirect(`/base/${baseId}/${table.id}/${view.id}`);
 
-  const result = await runView(ctx, role, table.id, view.config, {});
+  const result = await runView(ctx, role, table.id, view.config, { limit: 1000 });
   const counts = await commentCounts(ctx, result.rows.map((r) => r.id));
   const tFields = st.fields.filter((f) => f.tableId === table.id);
   const collabs = await db.select({ id: users.id, name: users.name }).from(memberships).innerJoin(users, eq(users.id, memberships.userId))
@@ -46,7 +46,7 @@ export default async function BasePage({ params }: { params: Promise<{ baseId: s
     table: { id: table.id, name: table.name, description: table.description ?? null, primaryFieldId: table.primaryFieldId, permissions: perms },
     allFields: tFields.filter((f) => fieldVisible(role, asLite(f))).map((f) => ({ ...asLite(f), tableId: f.tableId, editable: fieldEditable(role, asLite(f)), isPrimary: f.id === table.primaryFieldId })),
     views: tViews.map(toView), view: toView(view),
-    rows: result.rows, total: result.total, commentCounts: counts,
+    rows: result.rows, total: result.total, matched: result.matched, commentCounts: counts,
     collaborators: collabs,
     baseFields: st.fields.filter((f) => fieldVisible(role, asLite(f))).map((f) => ({ id: f.id, name: f.name, type: f.type, tableId: f.tableId })),
     can: {

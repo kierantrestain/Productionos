@@ -75,13 +75,13 @@ export async function archiveViewAction(viewId: string) {
   return toResult(async () => { await S.archiveView(await requireContext(), viewId); done(); });
 }
 /** Fresh computed rows for a view (after edits, or with a search term). */
-export async function loadViewAction(viewId: string, search?: string) {
+export async function loadViewAction(viewId: string, search?: string, limit = 1000) {
   return toResult(async () => {
     const ctx = await requireContext();
     const { view, access } = await S.viewContext(ctx, viewId);
-    const r = await runView(ctx, access.role, view.tableId, view.config, { search });
+    const r = await runView(ctx, access.role, view.tableId, view.config, { search, limit: Math.min(Math.max(limit, 100), 20_000) });
     const counts = await R.commentCounts(ctx, r.rows.map((x) => x.id));
-    return { rows: r.rows, total: r.total, commentCounts: counts };
+    return { rows: r.rows, total: r.total, matched: r.matched, commentCounts: counts };
   });
 }
 

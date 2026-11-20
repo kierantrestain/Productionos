@@ -114,19 +114,25 @@ export function coerceValue(f: FieldDefLite, v: unknown): unknown {
 }
 
 /** Plain-text rendering used for search, CSV export, sorting fallbacks and chips. */
+// Intl formatters are expensive to construct: cache them (hot path for sort/search/filter/export).
+const nfCache = new Map<string, Intl.NumberFormat>();
+const nf = (min: number, max: number) => { const k = `${min}:${max}`; let f = nfCache.get(k); if (!f) { f = new Intl.NumberFormat("en-GB", { minimumFractionDigits: min, maximumFractionDigits: max }); nfCache.set(k, f); } return f; };
+const DF_DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const DF_DT = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
 export function displayValue(f: FieldDefLite, v: unknown, ctx: { recordTitle?: (tableId: string, id: string) => string; userName?: (id: string) => string } = {}): string {
   if (v === null || v === undefined || v === "") return "";
   switch (f.type) {
     case "checkbox": return v ? "✓" : "";
     case "singleSelect": return f.options.choices?.find((c) => c.id === v)?.name ?? "";
     case "multipleSelects": return (v as string[]).map((id) => f.options.choices?.find((c) => c.id === id)?.name ?? "").filter(Boolean).join(", ");
-    case "currency": return `${f.options.symbol ?? "£"}${Number(v).toLocaleString("en-GB", { minimumFractionDigits: f.options.precision ?? 2, maximumFractionDigits: f.options.precision ?? 2 })}`;
-    case "percent": return `${(Number(v) * 100).toLocaleString("en-GB", { maximumFractionDigits: f.options.precision ?? 0 })}%`;
-    case "number": return Number(v).toLocaleString("en-GB", { minimumFractionDigits: f.options.precision ?? 0, maximumFractionDigits: f.options.precision ?? 0 });
+    case "currency": return `${f.options.symbol ?? "£"}${nf(f.options.precision ?? 2, f.options.precision ?? 2).format(Number(v))}`;
+    case "percent": return `${nf(0, f.options.precision ?? 0).format(Number(v) * 100)}%`;
+    case "number": return nf(f.options.precision ?? 0, f.options.precision ?? 0).format(Number(v));
     case "rating": return "★".repeat(Number(v));
     case "duration": { const s = Number(v); return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}`; }
-    case "date": return f.options.includeTime ? new Date(String(v)).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : new Date(`${String(v).slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-    case "dateTime": case "createdTime": case "lastModifiedTime": return new Date(String(v)).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+    case "date": return f.options.includeTime ? DF_DT.format(new Date(String(v))) : DF_DAY.format(new Date(`${String(v).slice(0, 10)}T12:00:00Z`));
+    case "dateTime": case "createdTime": case "lastModifiedTime": return DF_DT.format(new Date(String(v)));
     case "link": return (v as string[]).map((id) => ctx.recordTitle?.(f.options.linkedTableId!, id) ?? id).join(", ");
     case "user": case "createdBy": case "lastModifiedBy": return (Array.isArray(v) ? v : [v]).map((id) => ctx.userName?.(String(id)) ?? String(id)).join(", ");
     case "attachment": return (v as { filename: string }[]).map((a) => a.filename).join(", ");

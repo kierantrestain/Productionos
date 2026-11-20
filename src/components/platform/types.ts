@@ -16,6 +16,7 @@ export interface BaseData {
   view: ClientView;
   rows: ClientRow[];
   total: number;
+  matched: number;          // rows matching the view (the grid loads the first page, then more on demand)
   commentCounts: Record<string, number>;
   collaborators: { id: string; name: string }[];
   baseFields: { id: string; name: string; type: string; tableId: string }[]; // every visible field in the base (lookups, rollups, formulas)
