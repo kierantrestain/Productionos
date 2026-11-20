@@ -222,7 +222,7 @@ type Item = NonNullable<FormCfg["fields"]>[number];
 /** Form builder: question list (order, add/remove), per-question settings and logic, form settings, live preview. */
 export function FormView(p: ViewProps & { onSubmit: (values: Record<string, unknown>) => Promise<string | null>; color: string }) {
   const cfg = p.view.config.form ?? {};
-  const inputs = p.allFields.filter((f) => !isComputed(f.type) && f.editable && !["attachment", "aiText", "button", "link", "user"].includes(f.type));
+  const inputs = p.allFields.filter((f) => !isComputed(f.type) && f.editable && !["aiText", "button", "link", "user"].includes(f.type));
   const chosen: Item[] = (cfg.fields?.length ? cfg.fields : inputs.slice(0, 8).map((f) => ({ fieldId: f.id, required: f.isPrimary }))).filter((x) => inputs.some((f) => f.id === x.fieldId));
   const editing = p.view.canEdit;
   const [open, setOpen] = useState<string | null>(null);
@@ -278,7 +278,7 @@ export function FormView(p: ViewProps & { onSubmit: (values: Record<string, unkn
             </ol>
             {unused.length > 0 && <><div className="p-sect" style={{ padding: "12px 2px 6px" }}>Add a question</div>
               <div className="fb-add">{unused.map((f) => <button key={f.id} type="button" className="p-tbtn" onClick={() => { setCfg({ fields: [...chosen, { fieldId: f.id }] }); setOpen(f.id); }}><Plus size={13} />{f.name}</button>)}</div></>}
-            <p className="fb-note">Linked records, people and files can&apos;t be collected on public forms, so they aren&apos;t listed. Pre-fill a link with <code>?prefill_Field+name=value</code>.</p>
+            <p className="fb-note">Linked records and people can&apos;t be collected on public forms, so they aren&apos;t listed. File questions accept up to 5 files of 10 MB on the public link. Pre-fill a link with <code>?prefill_Field+name=value</code>.</p>
           </> : (
             <div className="fb-settings">
               <label>Submit button<input className="ui-input" defaultValue={cfg.submitLabel ?? ""} placeholder="Submit" onBlur={(e) => setCfg({ submitLabel: e.target.value || undefined })} /></label>
@@ -307,11 +307,11 @@ export function FormView(p: ViewProps & { onSubmit: (values: Record<string, unkn
 
 export type FormField = Item & { f: ClientField };
 /** Shared by the in-app form view and the public form page: pages, progress, conditional questions, validation. */
-export function FormBody({ title, description, fields, submitLabel, successMessage, onSubmit, onTitle, onDescription, initial, redirectUrl, allowAnother = true }: {
+export function FormBody({ title, description, fields, submitLabel, successMessage, onSubmit, onTitle, onDescription, initial, redirectUrl, allowAnother = true, uploadUrl }: {
   title: string; description?: string; fields: FormField[]; submitLabel?: string; successMessage?: string;
   onSubmit: (values: Record<string, unknown>) => Promise<string | null>;
   onTitle?: (t: string) => void; onDescription?: (d: string) => void; onRequired?: (id: string, req: boolean) => void;
-  initial?: Record<string, unknown>; redirectUrl?: string; allowAnother?: boolean;
+  initial?: Record<string, unknown>; redirectUrl?: string; allowAnother?: boolean; uploadUrl?: string;
 }) {
   const [vals, setVals] = useState<Record<string, unknown>>(initial ?? {});
   const [err, setErr] = useState(""); const [done, setDone] = useState(false); const [busy, setBusy] = useState(false);
@@ -350,7 +350,7 @@ export function FormBody({ title, description, fields, submitLabel, successMessa
         <div key={it.fieldId} style={{ marginBottom: 20 }}>
           <label htmlFor={`ff-${it.fieldId}`} style={{ display: "flex", gap: 6, fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{label(ff)}{ff.required && <span style={{ color: "var(--color-text-red)" }} aria-label="required">*</span>}</label>
           {(ff.help || ff.f.description) && <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 6 }}>{ff.help || ff.f.description}</div>}
-          <FormInput id={`ff-${it.fieldId}`} f={ff.f} value={vals[it.fieldId]} placeholder={ff.placeholder} onChange={(v) => setVals((s) => ({ ...s, [it.fieldId]: v }))} style={inp} />
+          <FormInput id={`ff-${it.fieldId}`} f={ff.f} value={vals[it.fieldId]} placeholder={ff.placeholder} uploadUrl={uploadUrl} onChange={(v) => setVals((s) => ({ ...s, [it.fieldId]: v }))} style={inp} />
         </div>
       ); })}
       {!pages.length && <p style={{ color: "var(--color-text-secondary)" }}>This form has no questions yet.</p>}
@@ -363,9 +363,10 @@ export function FormBody({ title, description, fields, submitLabel, successMessa
   );
 }
 
-function FormInput({ id, f, value, onChange, style, placeholder }: { id: string; f: ClientField; value: unknown; onChange: (v: unknown) => void; style: React.CSSProperties; placeholder?: string }) {
+function FormInput({ id, f, value, onChange, style, placeholder, uploadUrl }: { id: string; f: ClientField; value: unknown; onChange: (v: unknown) => void; style: React.CSSProperties; placeholder?: string; uploadUrl?: string }) {
   const ph = placeholder ? { placeholder } : {};
   switch (f.type) {
+    case "attachment": return <FileQuestion id={id} fieldId={f.id} value={value} onChange={onChange} uploadUrl={uploadUrl} />;
     case "longText": return <textarea id={id} rows={4} style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
     case "checkbox": return <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
     case "singleSelect": return <select id={id} style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value || null)}><option value="">Choose…</option>{f.options.choices?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>;
@@ -380,4 +381,29 @@ function FormInput({ id, f, value, onChange, style, placeholder }: { id: string;
     case "link": case "user": return <p style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Linked records can be added after submission.</p>;
     default: return <input id={id} style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
   }
+}
+
+type UploadedFile = { id: string; filename: string; size: number; type: string };
+/** File question on public forms: uploads immediately, attaches on submit. */
+function FileQuestion({ id, fieldId, value, onChange, uploadUrl }: { id: string; fieldId: string; value: unknown; onChange: (v: unknown) => void; uploadUrl?: string }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const files = (value as UploadedFile[] | undefined) ?? [];
+  if (!uploadUrl) return <p style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>People answering through the shared link can upload files here (up to 5, 10 MB each).</p>;
+  return (
+    <div>
+      <input id={id} type="file" multiple disabled={busy || files.length >= 5} onChange={async (e) => {
+        const list = [...(e.target.files ?? [])].slice(0, 5 - files.length); e.target.value = ""; setErr(""); setBusy(true);
+        const added: UploadedFile[] = [];
+        for (const file of list) {
+          const fd = new FormData(); fd.append("file", file); fd.append("fieldId", fieldId);
+          const r = await fetch(uploadUrl, { method: "POST", body: fd }).then((x) => x.json()).catch(() => ({ error: "Upload failed. Check your connection." }));
+          if (r.attachment) added.push(r.attachment); else { setErr(`${file.name}: ${r.error ?? "upload failed"}`); break; }
+        }
+        setBusy(false); if (added.length) onChange([...files, ...added]);
+      }} />
+      {busy && <span role="status" style={{ fontSize: 12, marginLeft: 8 }}>Uploading…</span>}
+      {err && <p role="alert" style={{ color: "var(--color-text-error)", fontSize: 12, margin: "4px 0 0" }}>{err}</p>}
+      {files.length > 0 && <ul style={{ listStyle: "none", padding: 0, margin: "8px 0 0", display: "grid", gap: 4 }}>{files.map((x) => <li key={x.id} style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "center" }}><Check size={14} color="#15803d" />{x.filename}<span style={{ color: "var(--color-text-secondary)" }}>{Math.max(1, Math.round(x.size / 1024))} KB</span><button type="button" className="p-tbtn" aria-label={`Remove ${x.filename}`} onClick={() => onChange(files.filter((y) => y.id !== x.id))}>Remove</button></li>)}</ul>}
+    </div>
+  );
 }

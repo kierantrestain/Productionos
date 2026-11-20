@@ -64,7 +64,7 @@ export function LineChart({ data, fmt, short }: { data: Point[]; fmt: (n: number
   );
 }
 
-export function DonutChart({ data, fmt, short }: { data: Point[]; fmt: (n: number) => string; short: (n: number) => string }) {
+export function DonutChart({ data, fmt, short, onSelect }: { data: Point[]; fmt: (n: number) => string; short: (n: number) => string; onSelect?: (label: string) => void }) {
   const tip = useTip();
   const top = data.length > SLOTS ? [...data.slice(0, SLOTS - 1), { label: "Other", value: data.slice(SLOTS - 1).reduce((a, b) => a + b.value, 0) }] : data;
   const total = top.reduce((a, b) => a + b.value, 0) || 1;
@@ -78,7 +78,7 @@ export function DonutChart({ data, fmt, short }: { data: Point[]; fmt: (n: numbe
           const a1 = a0 + (2 * Math.PI * p.value) / total; const large = a1 - a0 > Math.PI ? 1 : 0;
           const d = p.value >= total ? `M ${pt(R, 0)} A ${R} ${R} 0 1 1 ${pt(R, Math.PI)} A ${R} ${R} 0 1 1 ${pt(R, 0)} M ${pt(r, 0)} A ${r} ${r} 0 1 0 ${pt(r, Math.PI)} A ${r} ${r} 0 1 0 ${pt(r, 0)}` : `M ${pt(R, a0)} A ${R} ${R} 0 ${large} 1 ${pt(R, a1)} L ${pt(r, a1)} A ${r} ${r} 0 ${large} 0 ${pt(r, a0)} Z`;
           a0 = a1;
-          return <path key={p.label} className="if-arc" d={d} fill={colorOf(i, p.label)} stroke="var(--color-background-card)" strokeWidth={2} fillRule="evenodd" {...tip.on(`${p.label}: ${fmt(p.value)} (${Math.round((p.value / total) * 100)}%)`)} />;
+          return <path key={p.label} className="if-arc" d={d} style={{ cursor: onSelect && p.label !== "Other" ? "pointer" : undefined }} onClick={() => p.label !== "Other" && onSelect?.(p.label)} fill={colorOf(i, p.label)} stroke="var(--color-background-card)" strokeWidth={2} fillRule="evenodd" {...tip.on(`${p.label}: ${fmt(p.value)} (${Math.round((p.value / total) * 100)}%)`)} />;
         })}
         <text x={C} y={C - 2} textAnchor="middle" fontSize="17" fontWeight="700" fill="var(--color-text-primary)">{short(total)}</text>
         <text x={C} y={C + 15} textAnchor="middle" fontSize="10" fill="var(--color-text-secondary)">Total</text>

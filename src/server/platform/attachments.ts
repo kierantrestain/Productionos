@@ -20,8 +20,8 @@ import { asLite, tableContext } from "./schema";
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const MAX_FILES_PER_CELL = 50;
-const BLOCKED_EXT = /\.(exe|bat|cmd|com|msi|scr|ps1|sh|js|mjs|jar|vbs|dll|app|dmg|iso|html?|svg)$/i;
-const ALLOWED_TYPES = /^(application\/pdf|image\/(png|jpeg|gif|webp|heic|avif)|text\/(plain|csv)|application\/(msword|vnd\.openxmlformats-officedocument\..+|vnd\.ms-excel|vnd\.ms-powerpoint|zip|json|octet-stream)|video\/(mp4|quicktime|webm)|audio\/(mpeg|wav|x-wav|mp4))$/;
+export const BLOCKED_EXT = /\.(exe|bat|cmd|com|msi|scr|ps1|sh|js|mjs|jar|vbs|dll|app|dmg|iso|html?|svg)$/i;
+export const ALLOWED_TYPES = /^(application\/pdf|image\/(png|jpeg|gif|webp|heic|avif)|text\/(plain|csv)|application\/(msword|vnd\.openxmlformats-officedocument\..+|vnd\.ms-excel|vnd\.ms-powerpoint|zip|json|octet-stream)|video\/(mp4|quicktime|webm)|audio\/(mpeg|wav|x-wav|mp4))$/;
 export type AttachmentValue = { id: string; filename: string; size: number; type: string };
 
 async function context(ctx: Ctx, recordId: string, fieldId: string) {

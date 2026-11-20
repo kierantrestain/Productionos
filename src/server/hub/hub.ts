@@ -126,6 +126,7 @@ export function systemStatus() {
     { key: "secrets", name: "Secret encryption", ok: enc, detail: enc ? "Configured. Sync credentials and SSO secrets can be stored encrypted." : "Not configured: set SECRET_ENCRYPTION_KEY (32 random bytes, base64). Airtable sync and SSO secrets are refused until then." },
     { key: "mail", name: "Email delivery", ok: mail.enabled, detail: mail.enabled ? `Provider: ${mail.provider}.` : `Not sending: ${mail.reason}. Messages are drafted and blocked, never sent.` },
     { key: "storage", name: "File storage", ok: st.durable, detail: st.note },
+    { key: "slack", name: "Slack notifications", ok: /^https:\/\/hooks\.slack\.com\//.test(process.env.SLACK_WEBHOOK_URL ?? ""), detail: /^https:\/\/hooks\.slack\.com\//.test(process.env.SLACK_WEBHOOK_URL ?? "") ? "Automations can post to your Slack channel." : "Not configured: set SLACK_WEBHOOK_URL (a Slack incoming-webhook URL). Slack steps are skipped and logged until then." },
     { key: "jobs", name: "Scheduled jobs", ok: !!process.env.CRON_SECRET, detail: process.env.CRON_SECRET ? "Job endpoint is protected; schedules run when the scheduler calls it." : "CRON_SECRET not set: scheduled automations only run when triggered manually." },
   ];
 }
@@ -150,4 +151,19 @@ export async function quickAdd(ctx: Ctx, tableId: string, text: string) {
   if (!t?.primaryFieldId) throw invalid("That table can't take quick adds.");
   const [id] = await createRecords(ctx, t.id, [{ [t.primaryFieldId]: v.slice(0, 500) }]);
   return { baseId: t.baseId, tableId: t.id, recordId: id };
+}
+
+/** AI morning briefing from the same facts My work shows. Refuses (never fakes) when AI isn't configured. */
+export async function morningBriefing(ctx: Ctx) {
+  if (!aiConfigured()) throw invalid("AI isn't configured yet: an administrator must set ANTHROPIC_API_KEY. Until then, My work shows everything the briefing would use.");
+  const w = await myWork(ctx, { maxTables: 40 });
+  const line = (i: WorkItem) => `- [${i.reason}] ${i.title} (${i.tableName}, ${i.baseName})${i.due ? ` due ${i.due}` : ""}${i.status ? ` status ${i.status}` : ""}`;
+  const facts = [
+    `Counts: ${w.counts.overdue} overdue, ${w.counts.today} due today, ${w.counts.soon} due this week, ${w.counts.assigned} assigned, ${w.counts.approvals} approvals waiting, ${w.counts.mentions} mentions (30 days).`,
+    "Items:", ...w.items.slice(0, 40).map(line),
+    "Approvals:", ...w.approvals.slice(0, 10).map((a) => `- ${a.summary} (${a.baseName})`),
+    "Recent mentions:", ...w.mentions.slice(0, 8).map((m) => `- ${m.author} on ${m.record}: ${m.body.slice(0, 160)}`),
+  ].join("\n");
+  const { generateBriefing } = await import("../platform/ai");
+  return { text: await generateBriefing(ctx.name.split(" ")[0], facts), at: new Date().toISOString() };
 }

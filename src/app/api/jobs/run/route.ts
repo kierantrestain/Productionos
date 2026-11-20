@@ -14,8 +14,10 @@ async function handle(req: Request) {
   const syncs = await runDueSyncs().catch((e) => ({ error: String(e) }));
   const { runScheduledAutomations } = await import("@/server/platform/automations");
   const scheduled = await runScheduledAutomations().catch((e) => ({ error: String(e) }));
+  const { runDueWaits } = await import("@/server/platform/automations");
+  const waits = await runDueWaits().catch((e) => ({ error: String(e) }));
   const after = await drainOutbox({ budgetMs: 8_000 });
-  return NextResponse.json({ ok: true, stats, syncs, scheduled, after });
+  return NextResponse.json({ ok: true, stats, syncs, scheduled, waits, after });
 }
 export const GET = handle;
 export const POST = handle;

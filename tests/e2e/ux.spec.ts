@@ -76,6 +76,19 @@ test.describe.serial("usability", () => {
     await card.getByRole("link", { name: "Open" }).click();
     await page.waitForURL(/\/a\//);
     await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
+    // drill-down: clicking a chart segment filters the page; filters can be saved as a preset
+    const chart = page.locator(".ap-card", { hasText: "Click to filter" }).first();
+    if (await chart.count()) {
+      await chart.locator("[style*='cursor: pointer']").first().dispatchEvent("click"); // a one-slice donut's centre is the hole
+      await page.waitForURL(/f_/);
+      await expect(page.getByRole("button", { name: /Showing .* · Clear/ })).toBeVisible();
+      await page.getByRole("button", { name: "Save filters" }).click();
+      await page.getByRole("dialog").getByRole("textbox").fill("Drill preset");
+      await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
+      await expect(page.getByRole("button", { name: "Drill preset", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: /Showing .* · Clear/ }).click();
+      await page.waitForURL((u) => !u.search.includes("f_"));
+    }
     // table search + sort on the "All …" page
     await page.getByRole("navigation", { name: "App pages" }).getByRole("link").nth(1).click();
     await expect(page.getByRole("heading", { level: 1, name: /^All / })).toBeVisible();

@@ -8,9 +8,10 @@
  * never trigger, runs act as the automation owner with server-side permission checks.
  */
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, gt, inArray, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, like, lte, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { baseAutomations, baseFields, baseTables, baseViews, memberships, users, workflowRuns, type ViewConfig } from "@/db/schema";
+import { automationWaits, baseAutomations, baseFields, baseTables, baseViews, memberships, users, workflowRuns, type ViewConfig } from "@/db/schema";
+import { mailStatus, sendMail } from "../integrations/providers";
 import { cellText } from "@/lib/platform/cell-text";
 import type { Ctx } from "../auth/context";
 import { contextForUser } from "../auth/sessions";
@@ -36,10 +37,14 @@ export type Action =
   | { type: "ai_generate"; fieldId: string; prompt: string }
   | { type: "webhook"; url: string }
   /** In-app notification: @mentions the people (and anyone in the chosen person field) in a record comment → their My work. */
-  | { type: "notify"; userIds: string[]; userFieldId?: string; message: string }
+  | { type: "notify"; userIds: string[]; userFieldId?: string; message: string; email?: boolean; slack?: boolean }
+  /** Find records in a table of this base matching conditions, and update each (≤ 200). */
+  | { type: "find_update"; tableId: string; conditions: NonNullable<ViewConfig["filters"]>; values: Record<string, unknown> }
+  /** Pause: the remaining steps run later for the same record (top level only). */
+  | { type: "wait"; amount: number; unit: "minutes" | "hours" | "days" }
   | { type: "branch"; conditions: NonNullable<ViewConfig["filters"]>; then: Action[]; else: Action[] };
 const MAX_DEPTH = 3;
-const ACTION_TYPES = ["update_record", "update_linked", "create_record", "add_comment", "ai_generate", "webhook", "branch", "notify"];
+const ACTION_TYPES = ["update_record", "update_linked", "create_record", "add_comment", "ai_generate", "webhook", "branch", "notify", "find_update", "wait"];
 const TRIGGER_TYPES = ["record_created", "record_updated", "record_matches", "schedule", "webhook", "form_submitted"];
 
 export async function listAutomations(ctx: Ctx, baseId: string) {
@@ -72,6 +77,8 @@ async function validate(baseId: string, trigger: Trigger, actions: Action[]) {
       if (a.type === "ai_generate" && (!a.fieldId || !a.prompt?.trim())) throw invalid("AI steps need a field and a prompt.");
       if (a.type === "webhook" && !/^https:\/\//.test(a.url ?? "")) throw invalid("Webhook URLs must start with https://");
       if (a.type === "notify") { if (!a.message?.trim()) throw invalid("Notification steps need a message."); if (!(a.userIds?.length || a.userFieldId)) throw invalid("Choose who to notify."); if ((a.userIds?.length ?? 0) > 50) throw invalid("Notify at most 50 people per step."); notifyIds.push(...(a.userIds ?? [])); }
+      if (a.type === "find_update") { if (!ids.has(a.tableId)) throw invalid("Find steps must search a table of this base."); if (!Object.keys(a.values ?? {}).length) throw invalid("Choose what to update on the found records."); }
+      if (a.type === "wait") { if (depth > 0) throw invalid("Wait steps can't go inside an if/else branch."); if (!(a.amount >= 1 && a.amount <= 365) || !["minutes", "hours", "days"].includes(a.unit)) throw invalid("Wait between 1 and 365 minutes, hours or days."); }
       if (a.type === "branch") { walk(a.then, depth + 1); walk(a.else, depth + 1); }
     }
   };
@@ -140,7 +147,15 @@ async function executeSteps(ctx: Ctx, a: Auto, tableId: string, recordId: string
   const fieldName = (id: string) => snap.fields.find((f) => f.id === id)?.name ?? id;
   const resolved = (vals: Record<string, unknown>) => Object.fromEntries(Object.entries(vals).map(([k, x]) => [k, fill(x, snap.text)]));
   const describe = (vals: Record<string, unknown>, tid = tableId) => Object.entries(vals).map(([k, v]) => `${tid === tableId ? fieldName(k) : k} = ${JSON.stringify(v)}`).join(", ");
-  for (const act of steps) {
+  for (const [idx, act] of steps.entries()) {
+    if (act.type === "wait") {
+      const ms = act.amount * (act.unit === "minutes" ? 60_000 : act.unit === "hours" ? 3_600_000 : 86_400_000);
+      const rest = steps.slice(idx + 1);
+      log.push(`wait ${act.amount} ${act.unit}, then ${rest.length} more step(s)`);
+      if (dryRun) continue;
+      if (rest.length) await db.insert(automationWaits).values({ orgId: a.orgId, automationId: a.id, tableId, recordId, steps: rest as unknown[], depth, runAt: new Date(Date.now() + ms) });
+      return;
+    }
     if (act.type === "branch") {
       const match = !!(await snapshot(ctx, tableId, recordId, act.conditions));
       log.push(`if conditions → ${match ? "then" : "else"}`);
@@ -183,6 +198,32 @@ async function executeSteps(ctx: Ctx, a: Auto, tableId: string, recordId: string
       const msg = String(fill(act.message, snap.text));
       log.push(`notify ${people.map((p) => p.name).join(", ") || "nobody (no recipients on this record)"}: “${msg.slice(0, 100)}”`);
       if (!dryRun && people.length) await addComment(ctx, recordId, `${people.map((p) => `@[${p.name}](${p.id})`).join(" ")} ${msg}`);
+      if (act.email && people.length) {
+        const st = mailStatus();
+        if (!st.enabled) log.push(`email not sent: ${st.reason}`);
+        else if (!dryRun) {
+          const emails = await db.select({ id: users.id, email: users.email }).from(users).where(inArray(users.id, people.map((p) => p.id)));
+          for (const u of emails) {
+            try { await sendMail({ to: u.email, subject: `${a.name}: ${Object.values(snap.text)[0] ?? "update"}`, body: `${msg}\n\n— Sent by the “${a.name}” automation in Bang On OS.`, idempotencyKey: `notify:${a.id}:${recordId}:${u.id}:${Math.floor(Date.now() / 60_000)}` }); log.push(`  emailed ${u.email}`); }
+            catch (e) { log.push(`  email to ${u.email} failed: ${(e as Error).message}`); }
+          }
+        } else log.push(`email ${people.length} recipient(s)`);
+      }
+      if (act.slack) {
+        const url = process.env.SLACK_WEBHOOK_URL;
+        if (!url || !/^https:\/\/hooks\.slack\.com\//.test(url)) log.push("Slack not sent: SLACK_WEBHOOK_URL is not configured");
+        else if (dryRun) log.push("post to Slack");
+        else {
+          const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: `${people.length ? `${people.map((p) => p.name).join(", ")}: ` : ""}${msg}` }) }).catch((e) => ({ ok: false, status: String(e) } as const));
+          log.push(r.ok ? "  posted to Slack" : `  Slack post failed (${r.status})`);
+        }
+      }
+    } else if (act.type === "find_update") {
+      const found = await runView(ctx, "owner", act.tableId, act.conditions?.conditions?.length ? { filters: act.conditions } : {});
+      const targets = found.rows.slice(0, 200);
+      const vals = resolved(act.values);
+      log.push(`find ${found.rows.length} record(s)${found.rows.length > 200 ? " (first 200)" : ""} and update each: ${Object.keys(vals).length} field(s)`);
+      if (!dryRun) for (const r of targets) await updateRecord(ctx, r.id, vals, { automationDepth: depth + 1 });
     } else if (act.type === "webhook") {
       const body = { automation: a.name, recordId, fields: snap.text };
       log.push(`outbound POST to ${act.url} — queued for a creator's approval`);
@@ -305,4 +346,30 @@ export async function runAutomationForRecord(ctx: Ctx, automationId: string, rec
   const res = await runOne(a, `auto:${a.id}:button:${recordId}:${clickId}`, t.tableId, recordId, 0);
   await audit(db, ctx, "run_automation", "base_automations", a.id, { meta: { recordId, status: res.status } });
   return res;
+}
+
+/** Cron: resume automations paused by a wait step (≤ 100 per run). Each wait runs once. */
+export async function runDueWaits(now = new Date()) {
+  const due = await db.select().from(automationWaits).where(and(eq(automationWaits.status, "waiting"), lte(automationWaits.runAt, now))).limit(100);
+  let done = 0, failed = 0, cancelled = 0;
+  for (const w of due) {
+    const [claimed] = await db.update(automationWaits).set({ status: "running" }).where(and(eq(automationWaits.id, w.id), eq(automationWaits.status, "waiting"))).returning();
+    if (!claimed) continue;
+    const [a] = await db.select().from(baseAutomations).where(eq(baseAutomations.id, w.automationId)).limit(1);
+    const owner = a?.createdBy ? await contextForUser(a.createdBy, a.orgId) : null;
+    if (!a || !a.isEnabled || a.archivedAt || !owner) { await db.update(automationWaits).set({ status: "cancelled", finishedAt: new Date(), error: !a?.isEnabled ? "automation turned off" : "automation or owner unavailable" }).where(eq(automationWaits.id, w.id)); cancelled++; continue; }
+    const log: string[] = ["resumed after wait"];
+    try {
+      await executeSteps({ ...owner, name: `Automation: ${a.name}` }, a, w.tableId, w.recordId, w.steps as Action[], w.depth, false, log);
+      await db.update(automationWaits).set({ status: "done", finishedAt: new Date() }).where(eq(automationWaits.id, w.id));
+      await db.insert(workflowRuns).values({ orgId: a.orgId, workflowKey: `auto:${a.id}`, ruleVersion: 1, eventId: null, idempotencyKey: `auto:${a.id}:wait:${w.id}`, status: "succeeded", attempts: 1, result: { recordId: w.recordId, steps: log }, finishedAt: new Date() }).onConflictDoNothing();
+      done++;
+    } catch (e) {
+      const msg = String((e as Error)?.message ?? e).slice(0, 500);
+      await db.update(automationWaits).set({ status: "failed", finishedAt: new Date(), error: msg }).where(eq(automationWaits.id, w.id));
+      await db.insert(workflowRuns).values({ orgId: a.orgId, workflowKey: `auto:${a.id}`, ruleVersion: 1, eventId: null, idempotencyKey: `auto:${a.id}:wait:${w.id}`, status: "failed", attempts: 1, result: { recordId: w.recordId, steps: log }, lastError: msg, finishedAt: new Date() }).onConflictDoNothing();
+      failed++;
+    }
+  }
+  return { due: due.length, done, failed, cancelled };
 }

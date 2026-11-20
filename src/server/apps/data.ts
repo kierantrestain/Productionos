@@ -23,7 +23,7 @@ export type FieldLite = { id: string; name: string; type: string; options: Recor
 export type ComponentData =
   | { kind: "none" } | { kind: "error"; message: string }
   | { kind: "kpi"; value: number; count: number }
-  | { kind: "series"; series: { label: string; value: number; color?: string }[] }
+  | { kind: "series"; series: { label: string; value: number; color?: string; key?: string }[]; drillFieldId?: string }
   | { kind: "rows"; fields: FieldLite[]; rows: ViewRow[]; total: number; primaryFieldId: string | null; tableName: string }
   | { kind: "record"; fields: FieldLite[]; row: ViewRow | null; tableName: string; related: { fieldId: string; name: string; tableId: string; rows: { id: string; title: string }[] }[]; comments: { id: string; body: string; author: string | null; createdAt: string }[] }
   | { kind: "form"; fields: FieldLite[]; tableName: string }
@@ -124,11 +124,11 @@ export async function componentData(c: Ctx2, comp: Component): Promise<Component
           const keys = isDate ? (v ? [bucket(new Date(String(v)), p.dateUnit ?? "month")] : []) : g.type === "multipleSelects" && Array.isArray(v) ? (v as string[]).map((id) => g.options.choices?.find((ch) => ch.id === id)?.name ?? "") : [cellText(g, v) || "(Empty)"];
           for (const k of keys) groups.set(k, [...(groups.get(k) ?? []), r]);
         }
-        let series = [...groups.entries()].map(([label, rows]) => ({ label, value: aggregate(rows, p.agg, p.fieldId), color: g.options.choices?.find((ch) => ch.name === label)?.color as string | undefined }));
+        let series = [...groups.entries()].map(([label, rows]) => { const ch = g.options.choices?.find((x) => x.name === label); return { label, value: aggregate(rows, p.agg, p.fieldId), color: ch?.color as string | undefined, key: ch?.id as string | undefined }; });
         const order = g.options.choices?.map((ch) => ch.name) ?? [];
         series.sort((a, b) => (isDate ? a.label.localeCompare(b.label) : order.length ? (order.indexOf(a.label) + 1 || 999) - (order.indexOf(b.label) + 1 || 999) : b.value - a.value));
         series = series.slice(0, 40);
-        return { kind: "series", series };
+        return { kind: "series", series, drillFieldId: g.type === "singleSelect" || g.type === "multipleSelects" ? g.id : undefined };
       }
       case "table": case "kanban": case "activity": case "calendar": case "gallery": {
         if (!p.data?.tableId) return { kind: "none" };

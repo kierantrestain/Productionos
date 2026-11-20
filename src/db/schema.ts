@@ -1475,3 +1475,19 @@ export const baseAttachments = pgTable("base_attachments", {
   createdAt: ts("created_at").notNull().defaultNow(),
   deletedAt: ts("deleted_at"),
 }, (t) => [index("base_attachments_record").on(t.recordId)]);
+
+/** Automation runs paused by a "wait" step: the remaining steps resume for the record at run_at. */
+export const automationWaits = pgTable("automation_waits", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  automationId: uuid("automation_id").notNull().references(() => baseAutomations.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").notNull(),
+  recordId: uuid("record_id").notNull(),
+  steps: jsonb("steps").$type<unknown[]>().notNull(),
+  depth: integer("depth").notNull().default(0),
+  runAt: ts("run_at").notNull(),
+  status: text("status").notNull().default("waiting"), // waiting | done | failed | cancelled
+  createdAt: ts("created_at").notNull().defaultNow(),
+  finishedAt: ts("finished_at"),
+  error: text("error"),
+}, (t) => [index("automation_waits_due").on(t.status, t.runAt)]);

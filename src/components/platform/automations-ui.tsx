@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
-import { Zap, Plus, Trash2, Pencil, History, FlaskConical, GitBranch, Sparkles, Send, MessageSquare, PenLine, Link2, FilePlus2, Clock, Webhook, Check, X, FileInput, Bell } from "lucide-react";
+import { Zap, Plus, Trash2, Pencil, History, FlaskConical, GitBranch, Sparkles, Send, MessageSquare, PenLine, Link2, FilePlus2, Clock, Webhook, Check, X, FileInput, Bell, SearchCheck, Hourglass } from "lucide-react";
 import { isComputed } from "@/lib/platform/fields";
 import { automationRunsAction, decideApprovalAction, deleteAutomationAction, previewAutomationAction, saveAutomationAction, searchLinkAction } from "@/app/platform-actions";
 import type { Action, Trigger } from "@/server/platform/automations";
@@ -32,13 +32,15 @@ const STEPS: Record<Action["type"], [string, React.ReactNode]> = {
   create_record: ["Create a record", <FilePlus2 key="3" size={14} />], add_comment: ["Add a comment", <MessageSquare key="4" size={14} />],
   ai_generate: ["Generate a field with AI", <Sparkles key="5" size={14} />], webhook: ["Send to a webhook (needs approval)", <Send key="6" size={14} />],
   branch: ["If / else", <GitBranch key="7" size={14} />],
-  notify: ["Notify people (in-app)", <Bell key="8" size={14} />],
+  notify: ["Notify people (in-app, email, Slack)", <Bell key="8" size={14} />],
+  find_update: ["Find records and update each", <SearchCheck key="9" size={14} />],
+  wait: ["Wait, then continue", <Hourglass key="10" size={14} />],
 };
 const blank = (t: Action["type"], tableId: string): Action => t === "update_record" ? { type: t, values: {} } : t === "update_linked" ? { type: t, linkFieldId: "", values: {} } : t === "create_record" ? { type: t, tableId, values: {} }
-  : t === "add_comment" ? { type: t, body: "" } : t === "ai_generate" ? { type: t, fieldId: "", prompt: "" } : t === "webhook" ? { type: t, url: "https://" } : t === "notify" ? { type: t, userIds: [], message: "" } : { type: "branch", conditions: { conjunction: "and", conditions: [] }, then: [], else: [] };
+  : t === "add_comment" ? { type: t, body: "" } : t === "ai_generate" ? { type: t, fieldId: "", prompt: "" } : t === "webhook" ? { type: t, url: "https://" } : t === "notify" ? { type: t, userIds: [], message: "" } : t === "find_update" ? { type: t, tableId, conditions: { conjunction: "and", conditions: [] }, values: {} } : t === "wait" ? { type: t, amount: 1, unit: "days" } : { type: "branch", conditions: { conjunction: "and", conditions: [] }, then: [], else: [] };
 
 function summary(a: Action[], tableName: (id: string) => string): string {
-  return a.map((x) => x.type === "branch" ? `if… (${x.then.length}/${x.else.length} steps)` : x.type === "create_record" ? `create in ${tableName(x.tableId)}` : x.type === "notify" ? `notify ${x.userIds.length + (x.userFieldId ? 1 : 0)} recipient(s)` : STEPS[x.type][0].toLowerCase()).join(" → ");
+  return a.map((x) => x.type === "branch" ? `if… (${x.then.length}/${x.else.length} steps)` : x.type === "create_record" ? `create in ${tableName(x.tableId)}` : x.type === "notify" ? `notify ${x.userIds.length + (x.userFieldId ? 1 : 0)} recipient(s)${x.email ? " + email" : ""}${x.slack ? " + Slack" : ""}` : x.type === "wait" ? `wait ${x.amount} ${x.unit}` : x.type === "find_update" ? `update matching in ${tableName(x.tableId)}` : STEPS[x.type][0].toLowerCase()).join(" → ");
 }
 
 export function AutomationsApp({ meta, automations, approvals }: { meta: AMeta; automations: Auto[]; approvals: ApprovalRow[] }) {
@@ -212,7 +214,7 @@ function StepList({ meta, triggerTable, steps, onChange, fieldsOf, depth }: { me
         <fieldset key={i} style={{ border: "1px solid var(--color-border)", borderRadius: 8, padding: 12, marginTop: 12 }}>
           <legend style={{ fontWeight: 600, padding: "0 6px", display: "flex", gap: 6, alignItems: "center" }}>{STEPS[act.type][1]}Step {i + 1}</legend>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <select aria-label="Step type" style={inp} value={act.type} onChange={(e) => set(i, blank(e.target.value as Action["type"], meta.tables[0].id))}>{Object.entries(STEPS).filter(([k]) => k !== "branch" || depth < 2).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
+            <select aria-label="Step type" style={inp} value={act.type} onChange={(e) => set(i, blank(e.target.value as Action["type"], meta.tables[0].id))}>{Object.entries(STEPS).filter(([k]) => (k !== "branch" || depth < 2) && (k !== "wait" || depth === 0)).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
             <button type="button" className="p-tbtn" aria-label="Move up" disabled={i === 0} onClick={() => { const n = [...steps]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; onChange(n); }}>↑</button>
             <button type="button" className="p-tbtn" aria-label="Remove step" onClick={() => onChange(steps.filter((_, j) => j !== i))}><Trash2 size={14} /></button>
           </div>
@@ -235,7 +237,27 @@ function StepList({ meta, triggerTable, steps, onChange, fieldsOf, depth }: { me
             {tf.some((f) => f.type === "user") && <select aria-label="Also notify the people in" style={{ ...inp, marginBottom: 8 }} value={act.userFieldId ?? ""} onChange={(e) => set(i, { ...act, userFieldId: e.target.value || undefined })}><option value="">Also notify the people in… (optional)</option>{tf.filter((f) => f.type === "user").map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>}
             <textarea className="p-textarea" rows={2} aria-label="Notification message" value={act.message} onChange={(e) => set(i, { ...act, message: e.target.value })} placeholder="e.g. New request from {Client}: {Summary}" />
             <TokenPicker fields={tf} onPick={(t) => set(i, { ...act, message: `${act.message}${t}` })} />
-            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>Posts a comment on the record that @mentions them: it appears in their My work with a badge. Email delivery isn&apos;t configured, so nothing leaves the workspace.</p>
+            <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 13 }}>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={!!act.email} onChange={(e) => set(i, { ...act, email: e.target.checked })} /> Also email them</label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={!!act.slack} onChange={(e) => set(i, { ...act, slack: e.target.checked })} /> Also post to Slack</label>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>Always posts a comment that @mentions them (their My work + badge). Email and Slack only send when an owner has configured them (Settings → Integrations); otherwise the run log says why they were skipped.</p>
+          </>}
+          {act.type === "find_update" && <>
+            <select aria-label="Find in table" style={{ ...inp, marginBottom: 8 }} value={act.tableId} onChange={(e) => set(i, { ...act, tableId: e.target.value, conditions: { conjunction: "and", conditions: [] }, values: {} })}>{meta.tables.map((t) => <option key={t.id} value={t.id}>Find in {t.name}</option>)}</select>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>Where</div>
+            {fieldsOf(act.tableId).length > 0 && <ConditionList fields={fieldsOf(act.tableId)} conds={act.conditions.conditions} onChange={(c) => set(i, { ...act, conditions: { ...act.conditions, conditions: c } })} />}
+            <button type="button" className="p-tbtn" onClick={() => { const f0 = fieldsOf(act.tableId)[0]; if (f0) set(i, { ...act, conditions: { ...act.conditions, conditions: [...act.conditions.conditions, { fieldId: f0.id, op: "isNotEmpty" }] } }); }}><Plus size={14} />Add condition</button>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginTop: 8 }}>Then set on each found record ({"{Field}"} copies from the trigger record)</div>
+            <ValueRows tid={act.tableId} values={act.values} onValues={(v) => set(i, { ...act, values: v })} />
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>Updates up to 200 records per run. With no conditions, every record in the table is updated.</p>
+          </>}
+          {act.type === "wait" && <>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input aria-label="Wait amount" type="number" min={1} max={365} style={{ ...inp, width: 100 }} value={act.amount} onChange={(e) => set(i, { ...act, amount: Number(e.target.value) })} />
+              <select aria-label="Wait unit" style={{ ...inp, width: 140 }} value={act.unit} onChange={(e) => set(i, { ...act, unit: e.target.value as "days" })}><option value="minutes">minutes</option><option value="hours">hours</option><option value="days">days</option></select>
+            </div>
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>The steps after this run later for the same record, when the background job runner next runs after the wait (hourly once scheduled jobs are set up). Turning the automation off cancels pending waits.</p>
           </>}
           {act.type === "ai_generate" && <>
             <select aria-label="Field to fill" style={{ ...inp, marginBottom: 8 }} value={act.fieldId} onChange={(e) => set(i, { ...act, fieldId: e.target.value })}><option value="">Field to fill…</option>{tf.filter((f) => ["singleLineText", "longText", "aiText"].includes(f.type)).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>

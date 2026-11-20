@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { requireContext } from "@/server/auth/request";
 import { toResult } from "@/server/errors";
-import { changePassword, myWork, quickAdd, searchEverything, updateProfile } from "@/server/hub/hub";
+import { changePassword, morningBriefing, myWork, quickAdd, searchEverything, updateProfile } from "@/server/hub/hub";
 import { createSession, revokeUserSessions, SESSION_COOKIE, SESSION_TTL_MS } from "@/server/auth/sessions";
 
 export async function searchEverythingAction(q: string, currentBaseId?: string) {
@@ -27,4 +27,7 @@ export async function changePasswordAction(current: string, next: string) {
 }
 export async function quickAddAction(tableId: string, text: string) {
   return toResult(async () => { const r = await quickAdd(await requireContext(), tableId, String(text ?? "")); revalidatePath("/", "layout"); return r; });
+}
+export async function morningBriefingAction() {
+  return toResult(async () => morningBriefing(await requireContext()));
 }

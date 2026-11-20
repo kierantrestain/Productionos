@@ -166,6 +166,17 @@ export async function generateAiCell(prompt: string, mode: "text" | "analyze" | 
   throw invalid("The research took too long. Try a narrower prompt.");
 }
 
+/** Morning briefing: turns the person's My-work facts into a short, prioritised plan. Facts only — no invention. */
+export async function generateBriefing(name: string, facts: string): Promise<string> {
+  const res = await client().messages.create({
+    model: MODEL, max_tokens: 1200, output_config: { effort: "low" },
+    system: "You are a concise chief of staff. Using ONLY the facts provided, write a morning briefing: one-line headline, then 'Do first' (max 3 bullets, most urgent first, naming the record and base), then 'Also on your radar' (max 3 bullets). If there is nothing urgent, say so plainly. Never invent records, numbers or people. Plain text with '-' bullets; no markdown headings.",
+    messages: [{ role: "user", content: `Briefing for ${name}, ${new Date().toDateString()}.\n\nFacts:\n${facts}` }],
+  });
+  guard(res);
+  return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim().slice(0, 4000);
+}
+
 // ───────────── 3. Natural-language filters ─────────────
 const FilterSchema = z.object({
   conjunction: z.enum(["and", "or"]),

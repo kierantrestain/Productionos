@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { markMentionsSeen } from "./rail";
-import { AlertTriangle, AtSign, CalendarClock, CheckCircle2, Clock, Inbox, ShieldCheck, UserRound } from "lucide-react";
+import { morningBriefingAction } from "@/app/hub-actions";
+import { AlertTriangle, AtSign, Sparkles, CalendarClock, CheckCircle2, Clock, Inbox, ShieldCheck, UserRound } from "lucide-react";
 import type { WorkItem } from "@/server/hub/hub";
 import { HEAD_BG } from "@/components/platform/base-header";
 
@@ -27,6 +28,7 @@ export function MyWorkView({ name, data }: { name: string; data: Data }) {
   return (
     <div className="mw">
       <header className="mw-head">
+        <Briefing />
         <div><h1>{greet()}, {name}</h1><p>{c.overdue + c.today + c.approvals ? `${c.overdue} overdue, ${c.today} due today and ${c.approvals} approval${c.approvals === 1 ? "" : "s"} waiting on you.` : "Nothing urgent. Here's what's coming up."}{c.mentions ? ` ${c.mentions} mention${c.mentions === 1 ? "" : "s"} in the last 30 days.` : ""}</p></div>
       </header>
       <div className="mw-stats">
@@ -84,4 +86,20 @@ export function MyWorkView({ name, data }: { name: string; data: Data }) {
 function Stat({ icon, label, n, tone, onClick, href }: { icon: React.ReactNode; label: string; n: number; tone: string; onClick?: () => void; href?: string }) {
   const body = <><span className={`mw-stat-ic ${tone}`}>{icon}</span><span><strong>{n}</strong><small>{label}</small></span></>;
   return href ? <a href={href} className="mw-stat">{body}</a> : <button type="button" className="mw-stat" onClick={onClick}>{body}</button>;
+}
+
+/** "Brief me": an AI summary of this page's facts, cached for the day in this browser. */
+function Briefing() {
+  const key = `bangon:briefing:${new Date().toDateString()}`;
+  const [b, setB] = useState<{ text: string; at: string } | null>(null);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  useEffect(() => { try { const c = sessionStorage.getItem(key); if (c) setB(JSON.parse(c)); } catch { /* ignore */ } }, [key]);
+  const run = async () => { setBusy(true); setErr(""); const r = await morningBriefingAction(); setBusy(false); if (!r.ok) { setErr(r.error); return; } setB(r.data); try { sessionStorage.setItem(key, JSON.stringify(r.data)); } catch { /* ignore */ } };
+  return (
+    <div className="mw-brief">
+      <button type="button" className="p-tbtn on-blue" onClick={run} disabled={busy}><Sparkles size={14} />{busy ? "Writing your briefing…" : b ? "Refresh briefing" : "Brief me"}</button>
+      {err && <p role="alert" className="mw-muted" style={{ marginTop: 8 }}>{err}</p>}
+      {b && <div className="mw-card" style={{ marginTop: 10 }} aria-label="Morning briefing" role="region"><pre className="mw-brief-text">{b.text}</pre><p className="mw-muted" style={{ fontSize: 11 }}>Written by AI from your My work items at {new Date(b.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}. Check before acting.</p></div>}
+    </div>
+  );
 }

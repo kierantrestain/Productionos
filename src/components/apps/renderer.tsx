@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Layers, Gauge, TrendingUp, CircleCheck, CalendarClock, Users, PoundSterling, Activity, ChevronRight, ChevronLeft, FileText, Clock, Search, ArrowUp, ArrowDown, ImageIcon } from "lucide-react";
 import type { Component, Page } from "@/lib/apps/types";
@@ -10,7 +10,7 @@ import { CellView } from "@/components/platform/cells";
 import { cellText } from "@/lib/platform/cell-text";
 import { appButtonAction, appCommentAction, appFormAction, appUpdateAction } from "@/app/apps-actions";
 import { BarChart, DonutChart, LineChart } from "./charts";
-import { confirmDialog } from "@/components/ui/dialogs";
+import { confirmDialog, promptDialog } from "@/components/ui/dialogs";
 
 export type RuntimeInfo = { slug: string; pageId: string; preview: boolean; recordId?: string; role: string; pages: { id: string; slug: string; kind: string; tableId?: string }[]; design?: boolean };
 export const KPI_ICONS: Record<string, React.ComponentType<{ size?: number }>> = { layers: Layers, gauge: Gauge, trend: TrendingUp, check: CircleCheck, calendar: CalendarClock, users: Users, money: PoundSterling, activity: Activity, file: FileText, clock: Clock };
@@ -71,14 +71,7 @@ export function AppComponent({ comp, data, rc }: { comp: Component; data?: Compo
         </section>
       );
     }
-    case "chart": {
-      const { fmt, short } = formatter(p.format);
-      return (
-        <Card title={p.title} subtitle={p.subtitle}>
-          {data?.kind === "series" ? (data.series.length ? (p.chart === "line" ? <LineChart data={data.series} fmt={fmt} short={short} /> : p.chart === "donut" ? <DonutChart data={data.series} fmt={fmt} short={short} /> : <BarChart data={data.series} fmt={fmt} short={short} />) : <div className="ap-muted">No data yet.</div>) : <State d={data} />}
-        </Card>
-      );
-    }
+    case "chart": return <ChartComp comp={comp} data={data} rc={rc} />;
     case "table": return <TableComp comp={comp} data={data} rc={rc} />;
     case "kanban": return <KanbanComp comp={comp} data={data} rc={rc} />;
     case "activity": return <ActivityComp comp={comp} data={data} rc={rc} />;
@@ -146,15 +139,44 @@ function TableComp({ comp, data, rc }: { comp: Component; data?: ComponentData; 
   );
 }
 
+/** Charts drill down: clicking a bar/slice of a select field filters the whole page (same as the filter bar). */
+function ChartComp({ comp, data, rc }: { comp: Component; data?: ComponentData; rc: RuntimeInfo }) {
+  const p = comp.props; const router = useRouter(); const path = usePathname(); const params = useSearchParams();
+  const { fmt, short } = formatter(p.format);
+  if (data?.kind !== "series") return <Card title={p.title} subtitle={p.subtitle}><State d={data} /></Card>;
+  const fid = data.drillFieldId; const active = fid ? params.get(`f_${fid}`) : null;
+  const setF = (v: string | null) => { if (!fid || rc.design) return; const n = new URLSearchParams(params.toString()); if (v) n.set(`f_${fid}`, v); else n.delete(`f_${fid}`); router.replace(`${path}${n.toString() ? `?${n}` : ""}`, { scroll: false }); };
+  const onSelect = fid && !rc.design ? (label: string) => { const k = data.series.find((x) => x.label === label)?.key; if (k) setF(active === k ? null : k); } : undefined;
+  const activeLabel = active ? data.series.find((x) => x.key === active)?.label : undefined;
+  return (
+    <Card title={p.title} subtitle={p.subtitle} action={activeLabel ? <button type="button" className="ap-outline-btn" style={{ height: 28, padding: "0 10px" }} onClick={() => setF(null)}>Showing {activeLabel} · Clear</button> : onSelect ? <span className="ap-muted" style={{ fontSize: 12 }}>Click to filter</span> : undefined}>
+      {data.series.length ? (p.chart === "line" ? <LineChart data={data.series} fmt={fmt} short={short} /> : p.chart === "donut" ? <DonutChart data={data.series} fmt={fmt} short={short} onSelect={onSelect} /> : <BarChart data={data.series} fmt={fmt} short={short} onSelect={onSelect} />) : <div className="ap-muted">No data yet.</div>}
+    </Card>
+  );
+}
+
 /** Page-wide filters: choices go in the URL (shareable, back-button friendly); the server narrows every component on the same table. */
 function FilterBar({ comp, data, rc }: { comp: Component; data?: ComponentData; rc: RuntimeInfo }) {
   const router = useRouter(); const path = usePathname(); const params = useSearchParams();
   const [q, setQ] = useState(params.get("f_q") ?? "");
+  const [presets, setPresets] = useState<{ name: string; q: string }[]>([]);
+  useEffect(() => { try { setPresets(JSON.parse(localStorage.getItem(`bangon:presets:${rc.slug}:${rc.pageId}`) ?? "[]")); } catch { /* storage blocked */ } }, [rc.slug, rc.pageId]);
   if (data?.kind !== "filter") return <Card title={comp.props.title}><State d={data} /></Card>;
   const set = (k: string, v: string) => { const n = new URLSearchParams(params.toString()); if (v) n.set(`f_${k}`, v); else n.delete(`f_${k}`); if (!rc.design) router.replace(`${path}?${n.toString()}`, { scroll: false }); };
   const any = [...params.keys()].some((k) => k.startsWith("f_"));
+  // Saved filter presets: per person, per page, kept in this browser.
+  const presetKey = `bangon:presets:${rc.slug}:${rc.pageId}`;
+  const current = [...params.entries()].filter(([k]) => k.startsWith("f_"));
+  const savePreset = async () => {
+    const name = await promptDialog("Name these filters", "", { placeholder: "e.g. My open bugs", confirmLabel: "Save" }); if (!name?.trim()) return;
+    const next = [...presets.filter((x) => x.name !== name.trim()), { name: name.trim(), q: new URLSearchParams(current).toString() }].slice(-12);
+    setPresets(next); try { localStorage.setItem(presetKey, JSON.stringify(next)); } catch { /* storage blocked */ }
+  };
+  const applyPreset = (q: string) => { const n = new URLSearchParams(params.toString()); for (const k of [...n.keys()]) if (k.startsWith("f_")) n.delete(k); for (const [k, v] of new URLSearchParams(q)) n.set(k, v); setQ(n.get("f_q") ?? ""); router.replace(`${path}?${n}`, { scroll: false }); };
+  const dropPreset = (name: string) => { const next = presets.filter((x) => x.name !== name); setPresets(next); try { localStorage.setItem(presetKey, JSON.stringify(next)); } catch { /* ignore */ } };
   return (
     <div className="ap-filterbar" role="search" aria-label={comp.props.title || `Filter ${data.tableName}`}>
+      {presets.length > 0 && <div className="ap-presets" aria-label="Saved filters">{presets.map((x) => <span key={x.name} className={`ap-preset ${new URLSearchParams(current).toString() === x.q ? "on" : ""}`}><button type="button" onClick={() => applyPreset(x.q)}>{x.name}</button><button type="button" aria-label={`Delete saved filter ${x.name}`} onClick={() => dropPreset(x.name)}>×</button></span>)}</div>}
       {comp.props.showSearch !== false && <label className="ap-search"><Search size={14} aria-hidden /><input type="search" placeholder={`Search ${data.tableName.toLowerCase()}`} aria-label={`Search ${data.tableName}`} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") set("q", q.trim()); }} onBlur={() => q.trim() !== (params.get("f_q") ?? "") && set("q", q.trim())} /></label>}
       {data.fields.map((f) => { const cur = params.get(`f_${f.id}`) ?? ""; const choices = (f.options.choices as { id: string; name: string }[] | undefined) ?? []; return (
         <label key={f.id} className="ap-filter"><span>{f.name}</span>
@@ -163,6 +185,7 @@ function FilterBar({ comp, data, rc }: { comp: Component; data?: ComponentData; 
             {f.type === "checkbox" ? <><option value="true">Yes</option><option value="false">No</option></> : choices.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>); })}
+      {any && !rc.design && <button type="button" className="ap-outline-btn" style={{ height: 32 }} onClick={savePreset}>Save filters</button>}
       {any && <button type="button" className="ap-outline-btn" style={{ height: 32 }} onClick={() => { const n = new URLSearchParams(params.toString()); for (const k of [...n.keys()]) if (k.startsWith("f_")) n.delete(k); setQ(""); router.replace(`${path}${n.toString() ? `?${n}` : ""}`, { scroll: false }); }}>Clear filters</button>}
     </div>
   );
