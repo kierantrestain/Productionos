@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
-import { Zap, Plus, Trash2, Pencil, History, FlaskConical, GitBranch, Sparkles, Send, MessageSquare, PenLine, Link2, FilePlus2, Clock, Webhook, Check, X } from "lucide-react";
+import { Zap, Plus, Trash2, Pencil, History, FlaskConical, GitBranch, Sparkles, Send, MessageSquare, PenLine, Link2, FilePlus2, Clock, Webhook, Check, X, FileInput, Bell } from "lucide-react";
 import { isComputed } from "@/lib/platform/fields";
 import { automationRunsAction, decideApprovalAction, deleteAutomationAction, previewAutomationAction, saveAutomationAction, searchLinkAction } from "@/app/platform-actions";
 import type { Action, Trigger } from "@/server/platform/automations";
@@ -14,6 +14,7 @@ import { ConditionList } from "./toolbar";
 import type { ClientField } from "./types";
 import { confirmDialog } from "@/components/ui/dialogs";
 
+type AMeta = BaseMeta & { members?: { id: string; name: string }[] };
 type Auto = { id: string; name: string; isEnabled: boolean; trigger: Trigger; actions: Action[]; lastRunAt: string | null; runCount: number; failCount: number; webhookToken: string | null };
 export type ApprovalRow = { id: string; kind: string; summary: string; status: string; source: string; createdAt: string; result: Record<string, unknown> | null };
 const inp: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 8px" };
@@ -24,21 +25,23 @@ const TRIGGERS: Record<Trigger["type"], [string, React.ReactNode]> = {
   record_matches: ["When a record is created or updated and matches conditions", <Check key="m" size={14} />],
   schedule: ["On a schedule, for every matching record", <Clock key="s" size={14} />],
   webhook: ["When a webhook is received (creates a record)", <Webhook key="w" size={14} />],
+  form_submitted: ["When a form is submitted", <FileInput key="f" size={14} />],
 };
 const STEPS: Record<Action["type"], [string, React.ReactNode]> = {
   update_record: ["Update the record", <PenLine key="1" size={14} />], update_linked: ["Update linked records", <Link2 key="2" size={14} />],
   create_record: ["Create a record", <FilePlus2 key="3" size={14} />], add_comment: ["Add a comment", <MessageSquare key="4" size={14} />],
   ai_generate: ["Generate a field with AI", <Sparkles key="5" size={14} />], webhook: ["Send to a webhook (needs approval)", <Send key="6" size={14} />],
   branch: ["If / else", <GitBranch key="7" size={14} />],
+  notify: ["Notify people (in-app)", <Bell key="8" size={14} />],
 };
 const blank = (t: Action["type"], tableId: string): Action => t === "update_record" ? { type: t, values: {} } : t === "update_linked" ? { type: t, linkFieldId: "", values: {} } : t === "create_record" ? { type: t, tableId, values: {} }
-  : t === "add_comment" ? { type: t, body: "" } : t === "ai_generate" ? { type: t, fieldId: "", prompt: "" } : t === "webhook" ? { type: t, url: "https://" } : { type: "branch", conditions: { conjunction: "and", conditions: [] }, then: [], else: [] };
+  : t === "add_comment" ? { type: t, body: "" } : t === "ai_generate" ? { type: t, fieldId: "", prompt: "" } : t === "webhook" ? { type: t, url: "https://" } : t === "notify" ? { type: t, userIds: [], message: "" } : { type: "branch", conditions: { conjunction: "and", conditions: [] }, then: [], else: [] };
 
 function summary(a: Action[], tableName: (id: string) => string): string {
-  return a.map((x) => x.type === "branch" ? `if… (${x.then.length}/${x.else.length} steps)` : x.type === "create_record" ? `create in ${tableName(x.tableId)}` : STEPS[x.type][0].toLowerCase()).join(" → ");
+  return a.map((x) => x.type === "branch" ? `if… (${x.then.length}/${x.else.length} steps)` : x.type === "create_record" ? `create in ${tableName(x.tableId)}` : x.type === "notify" ? `notify ${x.userIds.length + (x.userFieldId ? 1 : 0)} recipient(s)` : STEPS[x.type][0].toLowerCase()).join(" → ");
 }
 
-export function AutomationsApp({ meta, automations, approvals }: { meta: BaseMeta; automations: Auto[]; approvals: ApprovalRow[] }) {
+export function AutomationsApp({ meta, automations, approvals }: { meta: AMeta; automations: Auto[]; approvals: ApprovalRow[] }) {
   const router = useRouter();
   const [edit, setEdit] = useState<Auto | null>(null);
   const [runs, setRuns] = useState<{ auto: Auto; rows: { id: string; status: string; result: unknown; error: string | null; at: string }[] } | null>(null);
@@ -121,7 +124,7 @@ export function ApprovalQueue({ items, onDone }: { items: ApprovalRow[]; onDone:
   );
 }
 
-function AutomationDialog({ meta, initial, onClose, onSaved }: { meta: BaseMeta; initial: Auto; onClose: () => void; onSaved: () => void }) {
+function AutomationDialog({ meta, initial, onClose, onSaved }: { meta: AMeta; initial: Auto; onClose: () => void; onSaved: () => void }) {
   const [a, setA] = useState<Auto>(initial);
   const [err, setErr] = useState("");
   const [preview, setPreview] = useState<{ recordId: string; steps: string[] | null }>({ recordId: "", steps: null });
@@ -151,6 +154,10 @@ function AutomationDialog({ meta, initial, onClose, onSaved }: { meta: BaseMeta;
           </div>
         )}
         {a.trigger.type === "schedule" && <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 6 }}>Runs with the background job runner (on the free hosting tier that is once a day). Each record is processed once per period.</p>}
+        {a.trigger.type === "form_submitted" && <div style={{ marginTop: 8 }}>
+          <select aria-label="Which form" style={inp} value={a.trigger.formViewId ?? ""} onChange={(e) => setT({ formViewId: e.target.value || undefined })}><option value="">Any form on this table</option>{meta.views.filter((v) => v.tableId === a.trigger.tableId && v.type === "form").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
+          <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 6 }}>Runs for responses that arrive through a shared form link (not records added in the grid).{!meta.views.some((v) => v.tableId === a.trigger.tableId && v.type === "form") && " This table has no form view yet — create one from the Data tab."}</p>
+        </div>}
         {a.trigger.type === "webhook" && <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 6 }}>After saving you get a secret URL. POST a JSON object whose keys are field names; a record is created and the steps run on it.</p>}
         {a.trigger.type === "record_updated" && <><label style={lbl}>Only when these fields change (optional)</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{tf.filter((f) => !isComputed(f.type)).map((f) => { const on = a.trigger.watchFieldIds?.includes(f.id); return <button key={f.id} type="button" className={`chip ${on ? "blue" : ""}`} style={{ border: 0, cursor: "pointer" }} onClick={() => setT({ watchFieldIds: on ? a.trigger.watchFieldIds!.filter((x) => x !== f.id) : [...(a.trigger.watchFieldIds ?? []), f.id] })}>{f.name}</button>; })}</div></>}
@@ -181,7 +188,7 @@ function AutomationDialog({ meta, initial, onClose, onSaved }: { meta: BaseMeta;
   );
 }
 
-function StepList({ meta, triggerTable, steps, onChange, fieldsOf, depth }: { meta: BaseMeta; triggerTable: string; steps: Action[]; onChange: (s: Action[]) => void; fieldsOf: (tid: string) => ClientField[]; depth: number }) {
+function StepList({ meta, triggerTable, steps, onChange, fieldsOf, depth }: { meta: AMeta; triggerTable: string; steps: Action[]; onChange: (s: Action[]) => void; fieldsOf: (tid: string) => ClientField[]; depth: number }) {
   const set = (i: number, s: Action) => onChange(steps.map((x, j) => (j === i ? s : x)));
   const writable = (tid: string) => fieldsOf(tid).filter((f) => !isComputed(f.type) && !["link", "user", "attachment", "button"].includes(f.type));
   const tf = fieldsOf(triggerTable);
@@ -221,10 +228,19 @@ function StepList({ meta, triggerTable, steps, onChange, fieldsOf, depth }: { me
             </div>
             <ValueRows tid={act.tableId} values={act.values} onValues={(v) => set(i, { ...act, values: v })} />
           </>}
-          {act.type === "add_comment" && <textarea className="p-textarea" rows={2} aria-label="Comment" value={act.body} onChange={(e) => set(i, { ...act, body: e.target.value })} placeholder="e.g. {Deal} was won — kick off onboarding." />}
+          {act.type === "add_comment" && <><textarea className="p-textarea" rows={2} aria-label="Comment" value={act.body} onChange={(e) => set(i, { ...act, body: e.target.value })} placeholder="e.g. {Deal} was won — kick off onboarding." /><TokenPicker fields={tf} onPick={(t) => set(i, { ...act, body: `${act.body}${t}` })} /></>}
+          {act.type === "notify" && <>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", marginBottom: 4 }}>Who</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>{(meta.members ?? []).map((m) => { const on = act.userIds.includes(m.id); return <button key={m.id} type="button" aria-pressed={on} className={`chip ${on ? "blue" : ""}`} style={{ border: 0, cursor: "pointer" }} onClick={() => set(i, { ...act, userIds: on ? act.userIds.filter((x) => x !== m.id) : [...act.userIds, m.id] })}>{m.name}</button>; })}</div>
+            {tf.some((f) => f.type === "user") && <select aria-label="Also notify the people in" style={{ ...inp, marginBottom: 8 }} value={act.userFieldId ?? ""} onChange={(e) => set(i, { ...act, userFieldId: e.target.value || undefined })}><option value="">Also notify the people in… (optional)</option>{tf.filter((f) => f.type === "user").map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>}
+            <textarea className="p-textarea" rows={2} aria-label="Notification message" value={act.message} onChange={(e) => set(i, { ...act, message: e.target.value })} placeholder="e.g. New request from {Client}: {Summary}" />
+            <TokenPicker fields={tf} onPick={(t) => set(i, { ...act, message: `${act.message}${t}` })} />
+            <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>Posts a comment on the record that @mentions them: it appears in their My work with a badge. Email delivery isn&apos;t configured, so nothing leaves the workspace.</p>
+          </>}
           {act.type === "ai_generate" && <>
             <select aria-label="Field to fill" style={{ ...inp, marginBottom: 8 }} value={act.fieldId} onChange={(e) => set(i, { ...act, fieldId: e.target.value })}><option value="">Field to fill…</option>{tf.filter((f) => ["singleLineText", "longText", "aiText"].includes(f.type)).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
             <textarea className="p-textarea" rows={2} aria-label="AI prompt" value={act.prompt} onChange={(e) => set(i, { ...act, prompt: e.target.value })} placeholder="e.g. Write a two-line onboarding welcome for {Account} who bought {Offer}." />
+            <TokenPicker fields={tf} onPick={(t) => set(i, { ...act, prompt: `${act.prompt}${t}` })} />
           </>}
           {act.type === "webhook" && <>
             <input aria-label="Webhook URL" style={inp} value={act.url} onChange={(e) => set(i, { ...act, url: e.target.value })} placeholder="https://hooks.example.com/…" />
@@ -250,7 +266,7 @@ function Origin() { const [o, setO] = useState(""); useEffect(() => setO(locatio
 
 
 /** One-click starting points built from this base's real tables and fields. They open in the editor, switched off. */
-function Recipes({ meta, onPick, compact }: { meta: BaseMeta; onPick: (a: Auto) => void; compact: boolean }) {
+function Recipes({ meta, onPick, compact }: { meta: AMeta; onPick: (a: Auto) => void; compact: boolean }) {
   const [open, setOpen] = useState(!compact);
   const out: { title: string; desc: string; icon: React.ReactNode; auto: Auto }[] = [];
   const mk = (name: string, trigger: Trigger, actions: Action[]): Auto => ({ id: "", name, isEnabled: false, trigger, actions, lastRunAt: null, runCount: 0, failCount: 0, webhookToken: null });
@@ -294,4 +310,11 @@ function Recipes({ meta, onPick, compact }: { meta: BaseMeta; onPick: (a: Auto) 
       </div>}
     </section>
   );
+}
+
+/** Insert a {Field name} placeholder that is replaced with the trigger record's value when the step runs. */
+function TokenPicker({ fields, onPick }: { fields: ClientField[]; onPick: (token: string) => void }) {
+  return <select aria-label="Insert a field value" className="p-tbtn" style={{ marginTop: 6, height: 28 }} value="" onChange={(e) => { if (e.target.value) onPick(`{${e.target.value}}`); }}>
+    <option value="">＋ Insert field value…</option>{fields.map((f) => <option key={f.id} value={f.name}>{f.name}</option>)}
+  </select>;
 }

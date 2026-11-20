@@ -8,9 +8,11 @@ import type { Page } from "@/lib/apps/types";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) { const { slug } = await params; return { title: slug.replace(/-/g, " ") }; }
 
-export default async function AppRuntimePage({ params, searchParams }: { params: Promise<{ slug: string; path?: string[] }>; searchParams: Promise<{ preview?: string }> }) {
+export default async function AppRuntimePage({ params, searchParams }: { params: Promise<{ slug: string; path?: string[] }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { slug, path = [] } = await params;
-  const preview = (await searchParams).preview === "1";
+  const sp = await searchParams;
+  const preview = sp.preview === "1";
+  const pageFilters = Object.fromEntries(Object.entries(sp).filter(([k, v]) => k.startsWith("f_") && typeof v === "string").slice(0, 10).map(([k, v]) => [k.slice(2), String(v).slice(0, 200)]));
   const ctx = await requirePageContext();
   let rt: Runtime;
   try { rt = await resolveRuntime(ctx, slug, preview); } catch { notFound(); }
@@ -23,7 +25,7 @@ export default async function AppRuntimePage({ params, searchParams }: { params:
   }
   const comps = page.components.filter((c) => canSee(rt.role, c.visibleTo));
   const data: Record<string, ComponentData> = {};
-  await Promise.all(comps.map(async (c) => { data[c.id] = await componentData({ ctx, rt, page, recordId }, c); }));
+  await Promise.all(comps.map(async (c) => { data[c.id] = await componentData({ ctx, rt, page, recordId, pageFilters }, c); }));
   const myApps = (await listApps(ctx)).filter((a) => a.publishedVersionId).map((a) => ({ slug: a.slug, name: a.name }));
   const pages = visiblePages(rt);
   return (

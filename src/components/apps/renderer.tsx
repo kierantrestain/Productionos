@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Layers, Gauge, TrendingUp, CircleCheck, CalendarClock, Users, PoundSterling, Activity, ChevronRight, ChevronLeft, FileText, Clock, Search, ArrowUp, ArrowDown, ImageIcon } from "lucide-react";
@@ -86,6 +86,7 @@ export function AppComponent({ comp, data, rc }: { comp: Component; data?: Compo
     case "form": return <FormComp comp={comp} data={data} rc={rc} />;
     case "button": return <ButtonComp comp={comp} rc={rc} />;
     case "calendar": return <CalendarComp comp={comp} data={data} rc={rc} />;
+    case "filter": return <FilterBar comp={comp} data={data} rc={rc} />;
     case "gallery": return <GalleryComp comp={comp} data={data} rc={rc} />;
     case "progress": {
       const { fmt } = formatter(p.format);
@@ -142,6 +143,28 @@ function TableComp({ comp, data, rc }: { comp: Component; data?: ComponentData; 
         {!rows.length && <div className="ap-muted" style={{ padding: 16 }}>{q ? "No matches." : "No records."}</div>}
       </div>
     </Card>
+  );
+}
+
+/** Page-wide filters: choices go in the URL (shareable, back-button friendly); the server narrows every component on the same table. */
+function FilterBar({ comp, data, rc }: { comp: Component; data?: ComponentData; rc: RuntimeInfo }) {
+  const router = useRouter(); const path = usePathname(); const params = useSearchParams();
+  const [q, setQ] = useState(params.get("f_q") ?? "");
+  if (data?.kind !== "filter") return <Card title={comp.props.title}><State d={data} /></Card>;
+  const set = (k: string, v: string) => { const n = new URLSearchParams(params.toString()); if (v) n.set(`f_${k}`, v); else n.delete(`f_${k}`); if (!rc.design) router.replace(`${path}?${n.toString()}`, { scroll: false }); };
+  const any = [...params.keys()].some((k) => k.startsWith("f_"));
+  return (
+    <div className="ap-filterbar" role="search" aria-label={comp.props.title || `Filter ${data.tableName}`}>
+      {comp.props.showSearch !== false && <label className="ap-search"><Search size={14} aria-hidden /><input type="search" placeholder={`Search ${data.tableName.toLowerCase()}`} aria-label={`Search ${data.tableName}`} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") set("q", q.trim()); }} onBlur={() => q.trim() !== (params.get("f_q") ?? "") && set("q", q.trim())} /></label>}
+      {data.fields.map((f) => { const cur = params.get(`f_${f.id}`) ?? ""; const choices = (f.options.choices as { id: string; name: string }[] | undefined) ?? []; return (
+        <label key={f.id} className="ap-filter"><span>{f.name}</span>
+          <select value={cur} onChange={(e) => set(f.id, e.target.value)} aria-label={`Filter by ${f.name}`}>
+            <option value="">All</option>
+            {f.type === "checkbox" ? <><option value="true">Yes</option><option value="false">No</option></> : choices.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>); })}
+      {any && <button type="button" className="ap-outline-btn" style={{ height: 32 }} onClick={() => { const n = new URLSearchParams(params.toString()); for (const k of [...n.keys()]) if (k.startsWith("f_")) n.delete(k); setQ(""); router.replace(`${path}${n.toString() ? `?${n}` : ""}`, { scroll: false }); }}>Clear filters</button>}
+    </div>
   );
 }
 

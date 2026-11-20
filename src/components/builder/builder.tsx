@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog } from "@/components/ui/modal";
-import { Monitor, Tablet, Smartphone, Play, Upload, History, Grid2x2, Trash2, Copy, ArrowLeft, ArrowRight, Plus, Gauge, BarChart3, Table2, Kanban, Activity, Heading, Text, Minus, FormInput, MousePointerClick, FileText, Search, CalendarDays, LayoutGrid, Target, ChevronUp, ChevronDown, Settings } from "lucide-react";
+import { Monitor, Tablet, Smartphone, Play, Upload, History, Grid2x2, Trash2, Copy, ArrowLeft, ArrowRight, Plus, Gauge, BarChart3, Table2, Kanban, Activity, Heading, Text, Minus, FormInput, MousePointerClick, FileText, Search, CalendarDays, LayoutGrid, Target, ListFilter, ChevronUp, ChevronDown, Settings } from "lucide-react";
 import { defaultProps, newId, PALETTE, slugify, type AppConfig, type Component, type ComponentType, type Page } from "@/lib/apps/types";
 import type { ComponentData } from "@/server/apps/data";
 import { listVersionsAction, previewDataAction, publishAppAction, rollbackAppAction, sampleRecordsAction, saveDraftAction, updateAppMetaAction } from "@/app/apps-actions";
@@ -13,7 +13,7 @@ import { ComponentInspector, PageInspector, type Meta } from "./inspector";
 import { confirmDialog } from "@/components/ui/dialogs";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
-const TILE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = { gauge: Gauge, chart: BarChart3, table: Table2, kanban: Kanban, activity: Activity, heading: Heading, text: Text, divider: Minus, form: FormInput, button: MousePointerClick, record: FileText, calendar: CalendarDays, gallery: LayoutGrid, progress: Target };
+const TILE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = { gauge: Gauge, chart: BarChart3, table: Table2, kanban: Kanban, activity: Activity, heading: Heading, text: Text, divider: Minus, form: FormInput, button: MousePointerClick, record: FileText, calendar: CalendarDays, gallery: LayoutGrid, progress: Target, filter: ListFilter };
 type AppInfo = { id: string; name: string; slug: string; audience: string; baseId: string; published: boolean; revision: number };
 
 export function Builder({ app, initial, meta }: { app: AppInfo; initial: AppConfig; meta: Meta }) {

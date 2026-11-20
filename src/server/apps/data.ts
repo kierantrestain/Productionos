@@ -8,7 +8,9 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { baseTables, baseViews, type ViewConfig } from "@/db/schema";
+import { baseFields, baseTables, baseViews, type ViewConfig } from "@/db/schema";
+import { fieldVisible } from "../platform/access";
+import { asLite } from "../platform/schema";
 import { cellText } from "@/lib/platform/cell-text";
 import type { Component, DataBinding, Page } from "@/lib/apps/types";
 import type { Ctx } from "../auth/context";
@@ -24,9 +26,13 @@ export type ComponentData =
   | { kind: "series"; series: { label: string; value: number; color?: string }[] }
   | { kind: "rows"; fields: FieldLite[]; rows: ViewRow[]; total: number; primaryFieldId: string | null; tableName: string }
   | { kind: "record"; fields: FieldLite[]; row: ViewRow | null; tableName: string; related: { fieldId: string; name: string; tableId: string; rows: { id: string; title: string }[] }[]; comments: { id: string; body: string; author: string | null; createdAt: string }[] }
-  | { kind: "form"; fields: FieldLite[]; tableName: string };
+  | { kind: "form"; fields: FieldLite[]; tableName: string }
+  | { kind: "filter"; fields: FieldLite[]; active: Record<string, string>; tableName: string };
 
-type Ctx2 = { ctx: Ctx; rt: Pick<Runtime, "app" | "config" | "role" | "scopeIds">; page: Page; recordId?: string };
+type Ctx2 = { ctx: Ctx; rt: Pick<Runtime, "app" | "config" | "role" | "scopeIds">; page: Page; recordId?: string;
+  /** Filter-bar choices from the page URL (fieldId → value, or "q" → text). They only ever narrow results. */
+  pageFilters?: Record<string, string> };
+const FILTERABLE = ["singleSelect", "multipleSelects", "checkbox"];
 
 async function tableOfBase(baseId: string, tableId: string) {
   const [t] = await db.select().from(baseTables).where(and(eq(baseTables.id, tableId), eq(baseTables.baseId, baseId), isNull(baseTables.archivedAt))).limit(1);
@@ -55,6 +61,18 @@ export async function effectiveQuery(c: Ctx2, b: DataBinding) {
     else if (b.scopeLinkFieldId) conds.push({ fieldId: b.scopeLinkFieldId, op: "hasAnyOf", value: c.rt.scopeIds });
     else throw forbidden("This component isn't scoped to the signed-in client.");
     if (!c.rt.scopeIds.length) recordIds = [];
+  }
+  // Page filter bar: applies to every component bound to the same table; only visible, filterable fields.
+  if (c.pageFilters && Object.keys(c.pageFilters).length) {
+    const fs = (await db.select().from(baseFields).where(and(eq(baseFields.tableId, table.id), isNull(baseFields.archivedAt)))).map(asLite);
+    const role = c.rt.role === "portal" ? "reader" : c.rt.role;
+    for (const [fid, val] of Object.entries(c.pageFilters)) {
+      if (!val) continue;
+      if (fid === "q") { if (table.primaryFieldId) conds.push({ fieldId: table.primaryFieldId, op: "contains", value: val.slice(0, 100) }); continue; }
+      const f = fs.find((x) => x.id === fid);
+      if (!f || !FILTERABLE.includes(f.type) || !fieldVisible(role, f)) continue;
+      conds.push(f.type === "singleSelect" ? { fieldId: f.id, op: "is", value: val } : f.type === "multipleSelects" ? { fieldId: f.id, op: "hasAnyOf", value: [val] } : { fieldId: f.id, op: val === "true" ? "isChecked" : "isNotChecked" });
+    }
   }
   const sorts = b.sortFieldId ? [{ fieldId: b.sortFieldId, dir: b.sortDir ?? "asc" }] : config.sorts;
   const vc: ViewConfig = { ...(conds.length ? { filters: { conjunction: config.filters?.conjunction === "or" && !b.filter?.conditions?.length ? "or" : "and", conditions: conds } } : {}), ...(sorts ? { sorts } : {}) };
@@ -126,6 +144,14 @@ export async function componentData(c: Ctx2, comp: Component): Promise<Component
         const writable = r.fields.filter((f) => !["lookup", "rollup", "count", "formula", "autonumber", "createdTime", "lastModifiedTime", "createdBy", "lastModifiedBy", "button", "attachment", "aiText", "link", "user"].includes(f.type) && f.permissions?.edit !== "owner" && f.permissions?.edit !== "creator");
         const chosen = p.fieldIds?.length ? p.fieldIds.map((id) => writable.find((f) => f.id === id)).filter(Boolean) as typeof writable : writable.slice(0, 8);
         return { kind: "form", fields: lite(chosen, table.primaryFieldId), tableName: table.name };
+      }
+      case "filter": {
+        if (!p.data?.tableId) return { kind: "none" };
+        const table = await tableOfBase(c.rt.app.baseId, p.data.tableId);
+        const r = await runView(c.ctx, viewRole(c.rt.role), table.id, {}, { recordIds: [] });
+        const usable = r.fields.filter((f) => FILTERABLE.includes(f.type));
+        const chosen = p.fieldIds?.length ? usable.filter((f) => p.fieldIds!.includes(f.id)) : usable.slice(0, 3);
+        return { kind: "filter", fields: lite(chosen, table.primaryFieldId), active: c.pageFilters ?? {}, tableName: table.name };
       }
       case "record": {
         const tableId = c.page.tableId;

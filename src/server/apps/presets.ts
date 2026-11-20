@@ -15,6 +15,7 @@ export type Layout = (typeof LAYOUTS)[number];
 type F = { id: string; name: string; type: string };
 const NUM = ["number", "currency", "percent", "rating", "duration"];
 const DATE = ["date", "dateTime"];
+const fs = (fields: F[], types: string[]) => fields.filter((f) => types.includes(f.type)).map((f) => f.id);
 
 export function presetConfig(layout: Layout, name: string, table: { id: string; name: string; primaryFieldId: string | null } | null, fields: F[]): AppConfig {
   const c = (type: Component["type"], w: number, props: Component["props"]): Component => ({ id: newId(), type, w, props });
@@ -34,6 +35,7 @@ export function presetConfig(layout: Layout, name: string, table: { id: string; 
 
   switch (layout) {
     case "dashboard":
+      if (select) home.components.push(c("filter", 12, { data, fieldIds: fs(fields, ["singleSelect", "multipleSelects", "checkbox"]).slice(0, 3), showSearch: true }));
       home.components.push(c("kpi", num ? 3 : 4, { title: `Total ${table.name.toLowerCase()}`, data, agg: "count", format: "number", icon: "layers" }));
       if (num) home.components.push(c("kpi", 3, { title: `Total ${num.name.toLowerCase()}`, data, agg: "sum", fieldId: num.id, format: fmt, icon: money ? "money" : "trend" }), c("kpi", 3, { title: `Average ${num.name.toLowerCase()}`, data, agg: "avg", fieldId: num.id, format: fmt, icon: "gauge" }));
       home.components.push(c("progress", num ? 3 : 4, { title: num ? `${num.name} goal` : "Record goal", data, agg: num ? "sum" : "count", fieldId: num?.id, format: fmt, target: 100 }));
@@ -41,7 +43,8 @@ export function presetConfig(layout: Layout, name: string, table: { id: string; 
       if (date) home.components.push(c("chart", select ? 6 : 12, { title: `${table.name} over time`, chart: "line", data, agg: "count", groupFieldId: date.id, dateUnit: "month" }));
       home.components.push(list(8, `Recent ${table.name.toLowerCase()}`), c("activity", 4, { title: "Latest updates", data: { ...data, sortDir: "desc" }, limit: 6, detailPageId: detail.id }));
       break;
-    case "records": home.components.push(list(8), c("form", 4, { title: `Add ${table.name.replace(/s$/, "").toLowerCase()}`, data, fieldIds: [], submitLabel: "Add", successMessage: "Added." })); break;
+    case "records": if (select) home.components.push(c("filter", 12, { data, fieldIds: fs(fields, ["singleSelect", "multipleSelects", "checkbox"]).slice(0, 3), showSearch: true }));
+      home.components.push(list(8), c("form", 4, { title: `Add ${table.name.replace(/s$/, "").toLowerCase()}`, data, fieldIds: [], submitLabel: "Add", successMessage: "Added." })); break;
     case "board":
       home.components.push(select ? c("kanban", 12, { title: `${table.name} by ${select.name.toLowerCase()}`, data, groupFieldId: select.id, fieldIds: cols.slice(1, 4), allowMove: true, detailPageId: detail.id })
         : c("text", 12, { text: `Add a single-select field to ${table.name} (e.g. Status) to group cards into columns, then pick it in this board's Data tab.` }));

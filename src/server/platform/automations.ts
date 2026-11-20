@@ -8,9 +8,9 @@
  * never trigger, runs act as the automation owner with server-side permission checks.
  */
 import { randomBytes } from "node:crypto";
-import { and, desc, eq, gt, isNull, like, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, like, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { baseAutomations, baseFields, baseTables, workflowRuns, type ViewConfig } from "@/db/schema";
+import { baseAutomations, baseFields, baseTables, baseViews, memberships, users, workflowRuns, type ViewConfig } from "@/db/schema";
 import { cellText } from "@/lib/platform/cell-text";
 import type { Ctx } from "../auth/context";
 import { contextForUser } from "../auth/sessions";
@@ -23,7 +23,9 @@ import { addComment, createRecords, updateRecord } from "./records";
 
 export type Schedule = { every: "hour" | "day" | "week"; hour?: number; weekday?: number };
 export type Trigger = {
-  type: "record_created" | "record_updated" | "record_matches" | "schedule" | "webhook";
+  type: "record_created" | "record_updated" | "record_matches" | "schedule" | "webhook" | "form_submitted";
+  /** form_submitted: a specific form view (any form on the table when empty). */
+  formViewId?: string;
   tableId: string; watchFieldIds?: string[]; conditions?: ViewConfig["filters"]; schedule?: Schedule;
 };
 export type Action =
@@ -33,10 +35,12 @@ export type Action =
   | { type: "add_comment"; body: string }
   | { type: "ai_generate"; fieldId: string; prompt: string }
   | { type: "webhook"; url: string }
+  /** In-app notification: @mentions the people (and anyone in the chosen person field) in a record comment → their My work. */
+  | { type: "notify"; userIds: string[]; userFieldId?: string; message: string }
   | { type: "branch"; conditions: NonNullable<ViewConfig["filters"]>; then: Action[]; else: Action[] };
 const MAX_DEPTH = 3;
-const ACTION_TYPES = ["update_record", "update_linked", "create_record", "add_comment", "ai_generate", "webhook", "branch"];
-const TRIGGER_TYPES = ["record_created", "record_updated", "record_matches", "schedule", "webhook"];
+const ACTION_TYPES = ["update_record", "update_linked", "create_record", "add_comment", "ai_generate", "webhook", "branch", "notify"];
+const TRIGGER_TYPES = ["record_created", "record_updated", "record_matches", "schedule", "webhook", "form_submitted"];
 
 export async function listAutomations(ctx: Ctx, baseId: string) {
   const { role } = await baseAccess(ctx, baseId);
@@ -51,6 +55,11 @@ async function validate(baseId: string, trigger: Trigger, actions: Action[]) {
   if (!TRIGGER_TYPES.includes(trigger?.type)) throw invalid("Choose a trigger.");
   if (!ids.has(trigger.tableId)) throw invalid("The trigger table must be in this base.");
   if (trigger.type === "schedule" && !["hour", "day", "week"].includes(trigger.schedule?.every ?? "")) throw invalid("Choose how often the schedule runs.");
+  if (trigger.type === "form_submitted" && trigger.formViewId) {
+    const [v] = await db.select({ id: baseViews.id }).from(baseViews).where(and(eq(baseViews.id, trigger.formViewId), eq(baseViews.tableId, trigger.tableId), eq(baseViews.type, "form"), isNull(baseViews.archivedAt))).limit(1);
+    if (!v) throw invalid("Choose a form on the trigger table.");
+  }
+  const orgId = (await db.select({ o: baseTables.orgId }).from(baseTables).where(eq(baseTables.id, trigger.tableId)).limit(1))[0]?.o;
   let count = 0;
   const walk = (list: Action[], depth: number) => {
     if (!Array.isArray(list)) throw invalid("Steps are malformed.");
@@ -62,11 +71,17 @@ async function validate(baseId: string, trigger: Trigger, actions: Action[]) {
       if (a.type === "add_comment" && !a.body?.trim()) throw invalid("Comment steps need text.");
       if (a.type === "ai_generate" && (!a.fieldId || !a.prompt?.trim())) throw invalid("AI steps need a field and a prompt.");
       if (a.type === "webhook" && !/^https:\/\//.test(a.url ?? "")) throw invalid("Webhook URLs must start with https://");
+      if (a.type === "notify") { if (!a.message?.trim()) throw invalid("Notification steps need a message."); if (!(a.userIds?.length || a.userFieldId)) throw invalid("Choose who to notify."); if ((a.userIds?.length ?? 0) > 50) throw invalid("Notify at most 50 people per step."); notifyIds.push(...(a.userIds ?? [])); }
       if (a.type === "branch") { walk(a.then, depth + 1); walk(a.else, depth + 1); }
     }
   };
+  const notifyIds: string[] = [];
   walk(actions, 0);
   if (!count) throw invalid("Add at least one step.");
+  if (notifyIds.length) {
+    const ok = await db.select({ u: memberships.userId }).from(memberships).where(and(eq(memberships.orgId, orgId!), inArray(memberships.userId, [...new Set(notifyIds)])));
+    if (ok.length !== new Set(notifyIds).size) throw invalid("Only members of this workspace can be notified.");
+  }
 }
 
 export async function saveAutomation(ctx: Ctx, baseId: string, input: { id?: string; name: string; trigger: Trigger; actions: Action[]; isEnabled?: boolean }) {
@@ -161,6 +176,13 @@ async function executeSteps(ctx: Ctx, a: Auto, tableId: string, recordId: string
         if (!aiConfigured()) throw new Error("AI isn't configured (ANTHROPIC_API_KEY).");
         await updateRecord(ctx, recordId, { [act.fieldId]: await generateAiText(prompt) }, { automationDepth: depth + 1 });
       }
+    } else if (act.type === "notify") {
+      const fromField = act.userFieldId ? ((snap.values[act.userFieldId] as unknown[] | null) ?? []).map((x) => (typeof x === "string" ? x : (x as { id?: string })?.id)).filter(Boolean) as string[] : [];
+      const ids = [...new Set([...(act.userIds ?? []), ...fromField])].slice(0, 50);
+      const people = ids.length ? await db.select({ id: users.id, name: users.name }).from(users).innerJoin(memberships, and(eq(memberships.userId, users.id), eq(memberships.orgId, ctx.orgId))).where(and(inArray(users.id, ids), isNull(users.disabledAt))) : [];
+      const msg = String(fill(act.message, snap.text));
+      log.push(`notify ${people.map((p) => p.name).join(", ") || "nobody (no recipients on this record)"}: “${msg.slice(0, 100)}”`);
+      if (!dryRun && people.length) await addComment(ctx, recordId, `${people.map((p) => `@[${p.name}](${p.id})`).join(" ")} ${msg}`);
     } else if (act.type === "webhook") {
       const body = { automation: a.name, recordId, fields: snap.text };
       log.push(`outbound POST to ${act.url} — queued for a creator's approval`);
@@ -204,6 +226,7 @@ export async function runAutomationsForEvent(e: Ev) {
   for (const a of autos) {
     const t = a.trigger as unknown as Trigger;
     if (t.tableId !== p.tableId || t.type === "schedule" || t.type === "webhook") continue;
+    if (t.type === "form_submitted" && (e.type !== "record.created" || !(p as { formViewId?: string }).formViewId || (t.formViewId && t.formViewId !== (p as { formViewId?: string }).formViewId))) continue;
     if (t.type === "record_created" && e.type !== "record.created") continue;
     if (t.type === "record_updated" && (e.type !== "record.updated" || (t.watchFieldIds?.length && !t.watchFieldIds.some((f) => p.changed?.includes(f))))) continue;
     out.push(await runOne(a, `auto:${a.id}:${e.id}`, p.tableId, e.entityId, p.depth ?? 0));

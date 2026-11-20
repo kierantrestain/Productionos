@@ -183,4 +183,30 @@ test.describe.serial("usability", () => {
     await page.getByRole("button", { name: "Create field" }).click();
     await expect(page.locator(".g-hcell", { hasText: fname })).toHaveCount(1); // new column exists (may be scrolled off to the right)
   });
+
+  test("form builder: question logic, pages and settings drive the live form", async ({ page }) => {
+    await login(page);
+    const baseId = await firstBase(page);
+    await page.goto(`/base/${baseId}`);
+    await page.waitForURL(/\/base\/[^/]+\/[^/]+\/[^/?]+/);
+    await page.getByRole("button", { name: "Form", exact: true }).first().click(); // create a form view
+    const side = page.getByRole("complementary", { name: "Form builder" });
+    await expect(side).toBeVisible();
+    const qs = side.locator(".fb-list > li");
+    await expect(qs.nth(1)).toBeVisible();
+    const second = (await qs.nth(1).locator(".fb-name").innerText()).replace("*", "").trim();
+    const firstLabel = (await qs.nth(0).locator(".fb-name").innerText()).replace("*", "").trim();
+    await qs.nth(1).locator(".fb-name").click();
+    await qs.nth(1).getByLabel("Condition question").selectOption({ label: firstLabel });
+    const form = page.locator(".form-card");
+    await expect(form.getByText(second, { exact: true })).toHaveCount(0); // hidden until the first is answered
+    await form.locator("[id^=ff-]").first().fill("Something");
+    await expect(form.getByText(second, { exact: true })).toBeVisible();
+    await qs.nth(1).getByLabel("Start a new page here").check();
+    await expect(form.getByText(/Page 1 of 2/)).toBeVisible();
+    await side.getByRole("tab", { name: "Settings" }).click();
+    await side.getByLabel("Close the form now").check();
+    await expect(page.getByText("This form is closed.")).toBeVisible();
+    await side.getByLabel("Close the form now").uncheck();
+  });
 });

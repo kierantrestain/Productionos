@@ -20,7 +20,7 @@ export interface DataBinding {
   scopeLinkFieldId?: string;
 }
 
-export type ComponentType = "heading" | "text" | "kpi" | "chart" | "table" | "kanban" | "activity" | "record" | "form" | "button" | "divider" | "calendar" | "gallery" | "progress";
+export type ComponentType = "heading" | "text" | "kpi" | "chart" | "table" | "kanban" | "activity" | "record" | "form" | "button" | "divider" | "calendar" | "gallery" | "progress" | "filter";
 
 export interface ButtonAction {
   kind: "navigate" | "create_record" | "update_record" | "run_automation" | "open_url";
@@ -73,7 +73,7 @@ export interface AppConfig {
 /** Palette metadata used by the builder. */
 export const PALETTE: { group: string; items: { type: ComponentType; label: string; icon: string; w: number }[] }[] = [
   { group: "Data & KPI", items: [{ type: "kpi", label: "KPI card", icon: "gauge", w: 3 }, { type: "chart", label: "Chart", icon: "chart", w: 6 }, { type: "table", label: "Table", icon: "table", w: 12 }, { type: "kanban", label: "Kanban", icon: "kanban", w: 12 }, { type: "activity", label: "Activity", icon: "activity", w: 4 }, { type: "progress", label: "Goal progress", icon: "progress", w: 4 }] },
-  { group: "Records", items: [{ type: "calendar", label: "Calendar", icon: "calendar", w: 12 }, { type: "gallery", label: "Gallery", icon: "gallery", w: 12 }] },
+  { group: "Records", items: [{ type: "filter", label: "Filter bar", icon: "filter", w: 12 }, { type: "calendar", label: "Calendar", icon: "calendar", w: 12 }, { type: "gallery", label: "Gallery", icon: "gallery", w: 12 }] },
   { group: "Content", items: [{ type: "heading", label: "Heading", icon: "heading", w: 12 }, { type: "text", label: "Text", icon: "text", w: 12 }, { type: "divider", label: "Divider", icon: "divider", w: 12 }] },
   { group: "Forms & actions", items: [{ type: "form", label: "Form", icon: "form", w: 6 }, { type: "button", label: "Button", icon: "button", w: 3 }, { type: "record", label: "Record detail", icon: "record", w: 12 }] },
 ];
@@ -96,6 +96,7 @@ export function defaultProps(type: ComponentType, tableId?: string): Component["
     case "divider": return {};
     case "calendar": return { title: "Calendar", data: tableId ? { tableId } : undefined, fieldIds: [] };
     case "gallery": return { title: "Gallery", data: tableId ? { tableId } : undefined, fieldIds: [], limit: 24 };
+    case "filter": return { title: "", data: tableId ? { tableId } : undefined, fieldIds: [], showSearch: true };
     case "progress": return { title: "Goal", data: tableId ? { tableId } : undefined, agg: "count", format: "number", target: 100 };
   }
 }
@@ -117,7 +118,7 @@ export function validateAppConfig(c: AppConfig): AppConfig {
     for (const comp of p.components) {
       if (!comp.id || cids.has(comp.id)) throw new Error(`Components on “${p.title}” need unique ids.`);
       cids.add(comp.id);
-      if (!["heading", "text", "kpi", "chart", "table", "kanban", "activity", "record", "form", "button", "divider", "calendar", "gallery", "progress"].includes(comp.type)) throw new Error(`Unknown component “${comp.type}”.`);
+      if (!["heading", "text", "kpi", "chart", "table", "kanban", "activity", "record", "form", "button", "divider", "calendar", "gallery", "progress", "filter"].includes(comp.type)) throw new Error(`Unknown component “${comp.type}”.`);
       comp.w = Math.min(12, Math.max(1, Math.round(comp.w || 12)));
     }
   }

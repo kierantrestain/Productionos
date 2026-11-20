@@ -1268,7 +1268,11 @@ export interface ViewConfig {
   rowHeight?: "short" | "medium" | "tall" | "extra";
   color?: { mode: "none" | "select" | "conditions"; fieldId?: string; rules?: { color: string; fieldId: string; op: string; value?: unknown }[] };
   kanbanFieldId?: string; dateFieldId?: string; endDateFieldId?: string; coverFieldId?: string; titleFieldId?: string;
-  form?: { title?: string; description?: string; fields?: { fieldId: string; required?: boolean; help?: string }[]; submitLabel?: string; successMessage?: string; isPublic?: boolean };
+  form?: {
+    title?: string; description?: string; submitLabel?: string; successMessage?: string; isPublic?: boolean;
+    fields?: { fieldId: string; required?: boolean; help?: string; label?: string; placeholder?: string; pageBreak?: boolean; showIf?: { fieldId: string; op: "is" | "isNot" | "isNotEmpty" | "isEmpty" | "isChecked"; value?: string } }[];
+    redirectUrl?: string; allowAnother?: boolean; closed?: boolean; closesAt?: string;
+  };
   summaries?: Record<string, string>;
 }
 export const baseViews = pgTable("base_views", {

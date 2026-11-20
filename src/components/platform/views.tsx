@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Plus, ImageIcon, Check } from "lucide-react";
 import type { ViewConfig } from "@/db/schema";
 import { isComputed } from "@/lib/platform/fields";
+import { cleanAnswers, formClosed, missingRequired, pagesOf, safeRedirect, visibleItems, type FormItem } from "@/lib/platform/form-logic";
 import { CellView, cellText } from "./cells";
 import type { ClientField, ClientRow, ClientView } from "./types";
 
@@ -215,90 +216,168 @@ export function ListView(p: ViewProps) {
 }
 
 // ───────── Form ─────────
+type FormCfg = NonNullable<ViewConfig["form"]>;
+type Item = NonNullable<FormCfg["fields"]>[number];
+
+/** Form builder: question list (order, add/remove), per-question settings and logic, form settings, live preview. */
 export function FormView(p: ViewProps & { onSubmit: (values: Record<string, unknown>) => Promise<string | null>; color: string }) {
   const cfg = p.view.config.form ?? {};
   const inputs = p.allFields.filter((f) => !isComputed(f.type) && f.editable && !["attachment", "aiText", "button", "link", "user"].includes(f.type));
-  const chosen = (cfg.fields?.length ? cfg.fields : inputs.slice(0, 8).map((f) => ({ fieldId: f.id, required: f.isPrimary }))).filter((x) => inputs.some((f) => f.id === x.fieldId));
+  const chosen: Item[] = (cfg.fields?.length ? cfg.fields : inputs.slice(0, 8).map((f) => ({ fieldId: f.id, required: f.isPrimary }))).filter((x) => inputs.some((f) => f.id === x.fieldId));
   const editing = p.view.canEdit;
-  const setCfg = (patch: NonNullable<ViewConfig["form"]>) => p.onConfig({ form: { ...cfg, fields: chosen, ...patch } });
+  const [open, setOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<"questions" | "settings">("questions");
+  const setCfg = (patch: Partial<FormCfg>) => p.onConfig({ form: { ...cfg, fields: chosen, ...patch } });
+  const setItem = (id: string, patch: Partial<Item>) => setCfg({ fields: chosen.map((c) => (c.fieldId === id ? { ...c, ...patch } : c)) });
+  const move = (i: number, d: number) => { const n = [...chosen]; const j = i + d; if (j < 0 || j >= n.length) return; [n[i], n[j]] = [n[j], n[i]]; setCfg({ fields: n }); };
+  const unused = inputs.filter((f) => !chosen.some((c) => c.fieldId === f.id));
+  const name = (id: string) => inputs.find((f) => f.id === id)?.name ?? "?";
+  const closed = formClosed(cfg);
   return (
-    <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+    <div className="fb-wrap">
       {editing && (
-        <aside style={{ width: 260, borderRight: "1px solid var(--color-border)", overflow: "auto", padding: 12 }}>
-          <div className="p-sect" style={{ padding: "0 0 8px" }}>Fields on the form</div>
-          {inputs.map((f) => { const on = chosen.find((c) => c.fieldId === f.id); return (
-            <label key={f.id} className="g-opt" style={{ justifyContent: "space-between" }}>
-              <span>{f.name}</span>
-              <input type="checkbox" checked={!!on} onChange={() => setCfg({ fields: on ? chosen.filter((c) => c.fieldId !== f.id) : [...chosen, { fieldId: f.id }] })} />
-            </label>
-          ); })}
-          <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 12 }}>Share a public link from “Share & export”. Submissions arrive as new records; nothing else in the base is exposed.</p>
+        <aside className="fb-side" aria-label="Form builder">
+          <div className="fb-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === "questions"} className={tab === "questions" ? "on" : ""} onClick={() => setTab("questions")}>Questions</button>
+            <button type="button" role="tab" aria-selected={tab === "settings"} className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>Settings</button>
+          </div>
+          {tab === "questions" ? <>
+            <ol className="fb-list">
+              {chosen.map((c, i) => { const f = inputs.find((x) => x.id === c.fieldId)!; const isOpen = open === c.fieldId; return (
+                <li key={c.fieldId} className={isOpen ? "open" : ""}>
+                  {c.pageBreak && i > 0 && <div className="fb-break">Page break</div>}
+                  <div className="fb-row">
+                    <button type="button" className="fb-name" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : c.fieldId)}>{c.label || f.name}{c.required && <span className="fb-req">*</span>}{c.showIf && <span className="fb-tag">logic</span>}</button>
+                    <button type="button" className="fb-ic" aria-label={`Move ${f.name} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
+                    <button type="button" className="fb-ic" aria-label={`Move ${f.name} down`} disabled={i === chosen.length - 1} onClick={() => move(i, 1)}>↓</button>
+                    <button type="button" className="fb-ic" aria-label={`Remove ${f.name} from the form`} onClick={() => setCfg({ fields: chosen.filter((x) => x.fieldId !== c.fieldId) })}>×</button>
+                  </div>
+                  {isOpen && (
+                    <div className="fb-edit">
+                      <label>Question<input className="ui-input" defaultValue={c.label ?? ""} placeholder={f.name} onBlur={(e) => setItem(c.fieldId, { label: e.target.value || undefined })} /></label>
+                      <label>Help text<input className="ui-input" defaultValue={c.help ?? ""} placeholder={f.description ?? "Optional guidance"} onBlur={(e) => setItem(c.fieldId, { help: e.target.value || undefined })} /></label>
+                      {!["checkbox", "singleSelect", "multipleSelects", "rating"].includes(f.type) && <label>Placeholder<input className="ui-input" defaultValue={c.placeholder ?? ""} onBlur={(e) => setItem(c.fieldId, { placeholder: e.target.value || undefined })} /></label>}
+                      <label className="fb-check"><input type="checkbox" checked={!!c.required} onChange={(e) => setItem(c.fieldId, { required: e.target.checked })} /> Required</label>
+                      {i > 0 && <label className="fb-check"><input type="checkbox" checked={!!c.pageBreak} onChange={(e) => setItem(c.fieldId, { pageBreak: e.target.checked })} /> Start a new page here</label>}
+                      {i > 0 && <fieldset className="fb-logic"><legend>Only show when…</legend>
+                        <select className="ui-input" aria-label="Condition question" value={c.showIf?.fieldId ?? ""} onChange={(e) => setItem(c.fieldId, { showIf: e.target.value ? { fieldId: e.target.value, op: "isNotEmpty" } : undefined })}>
+                          <option value="">Always show</option>{chosen.slice(0, i).map((x) => <option key={x.fieldId} value={x.fieldId}>{x.label || name(x.fieldId)}</option>)}
+                        </select>
+                        {c.showIf && (() => { const src = inputs.find((x) => x.id === c.showIf!.fieldId); const sel = src?.type === "singleSelect" || src?.type === "multipleSelects"; return <>
+                          <select className="ui-input" aria-label="Condition" value={c.showIf.op} onChange={(e) => setItem(c.fieldId, { showIf: { ...c.showIf!, op: e.target.value as "is" } })}>
+                            <option value="isNotEmpty">is answered</option><option value="isEmpty">is not answered</option>{src?.type === "checkbox" && <option value="isChecked">is ticked</option>}<option value="is">is</option><option value="isNot">is not</option>
+                          </select>
+                          {(c.showIf.op === "is" || c.showIf.op === "isNot") && (sel ? <select className="ui-input" aria-label="Value" value={c.showIf.value ?? ""} onChange={(e) => setItem(c.fieldId, { showIf: { ...c.showIf!, value: e.target.value } })}><option value="">Choose…</option>{src!.options.choices?.map((ch) => <option key={ch.id} value={ch.id}>{ch.name}</option>)}</select>
+                            : <input className="ui-input" aria-label="Value" defaultValue={c.showIf.value ?? ""} onBlur={(e) => setItem(c.fieldId, { showIf: { ...c.showIf!, value: e.target.value } })} />)}
+                        </>; })()}
+                      </fieldset>}
+                    </div>
+                  )}
+                </li>
+              ); })}
+            </ol>
+            {unused.length > 0 && <><div className="p-sect" style={{ padding: "12px 2px 6px" }}>Add a question</div>
+              <div className="fb-add">{unused.map((f) => <button key={f.id} type="button" className="p-tbtn" onClick={() => { setCfg({ fields: [...chosen, { fieldId: f.id }] }); setOpen(f.id); }}><Plus size={13} />{f.name}</button>)}</div></>}
+            <p className="fb-note">Linked records, people and files can&apos;t be collected on public forms, so they aren&apos;t listed. Pre-fill a link with <code>?prefill_Field+name=value</code>.</p>
+          </> : (
+            <div className="fb-settings">
+              <label>Submit button<input className="ui-input" defaultValue={cfg.submitLabel ?? ""} placeholder="Submit" onBlur={(e) => setCfg({ submitLabel: e.target.value || undefined })} /></label>
+              <label>Thank-you message<textarea className="ui-input" rows={3} defaultValue={cfg.successMessage ?? ""} placeholder="Your response has been recorded." onBlur={(e) => setCfg({ successMessage: e.target.value || undefined })} /></label>
+              <label>After submitting, go to (optional)<input className="ui-input" type="url" defaultValue={cfg.redirectUrl ?? ""} placeholder="https://…" onBlur={(e) => setCfg({ redirectUrl: e.target.value || undefined })} />{cfg.redirectUrl && !safeRedirect(cfg.redirectUrl) && <small style={{ color: "#d93025" }}>Must start with http:// or https://</small>}</label>
+              <label className="fb-check"><input type="checkbox" checked={cfg.allowAnother !== false} onChange={(e) => setCfg({ allowAnother: e.target.checked })} /> Show “Submit another response”</label>
+              <label className="fb-check"><input type="checkbox" checked={!!cfg.closed} onChange={(e) => setCfg({ closed: e.target.checked })} /> Close the form now</label>
+              <label>Close automatically on<input className="ui-input" type="datetime-local" defaultValue={cfg.closesAt?.slice(0, 16) ?? ""} onBlur={(e) => setCfg({ closesAt: e.target.value ? new Date(e.target.value).toISOString() : undefined })} /></label>
+              <p className="fb-note">{closed ? "This form is closed: the public link shows a closed message and submissions are refused." : "Open: share the public link from “Share & export”. Submissions arrive as new records and can trigger automations (“When a form is submitted”)."}</p>
+            </div>
+          )}
         </aside>
       )}
       <div className="form-page">
+        {closed && <div className="fb-closed" role="status">This form is closed. People with the link see a closed message.</div>}
         <div className="form-card">
           <div className="form-band" style={{ background: `var(--color-text-${p.color})` }} />
           <FormBody title={cfg.title ?? p.view.name} description={cfg.description} fields={chosen.map((c) => ({ ...c, f: inputs.find((f) => f.id === c.fieldId)! }))}
-            submitLabel={cfg.submitLabel} successMessage={cfg.successMessage} onSubmit={p.onSubmit}
-            onTitle={editing ? (t) => setCfg({ title: t }) : undefined} onDescription={editing ? (d) => setCfg({ description: d }) : undefined}
-            onRequired={editing ? (id, req) => setCfg({ fields: chosen.map((c) => (c.fieldId === id ? { ...c, required: req } : c)) }) : undefined} />
+            submitLabel={cfg.submitLabel} successMessage={cfg.successMessage} allowAnother={cfg.allowAnother !== false} onSubmit={p.onSubmit}
+            onTitle={editing ? (t) => setCfg({ title: t }) : undefined} onDescription={editing ? (d) => setCfg({ description: d }) : undefined} />
         </div>
       </div>
     </div>
   );
 }
 
-export type FormField = { fieldId: string; required?: boolean; help?: string; f: ClientField };
-/** Shared by the in-app form view and the public form page. */
-export function FormBody({ title, description, fields, submitLabel, successMessage, onSubmit, onTitle, onDescription, onRequired }: {
+export type FormField = Item & { f: ClientField };
+/** Shared by the in-app form view and the public form page: pages, progress, conditional questions, validation. */
+export function FormBody({ title, description, fields, submitLabel, successMessage, onSubmit, onTitle, onDescription, initial, redirectUrl, allowAnother = true }: {
   title: string; description?: string; fields: FormField[]; submitLabel?: string; successMessage?: string;
   onSubmit: (values: Record<string, unknown>) => Promise<string | null>;
   onTitle?: (t: string) => void; onDescription?: (d: string) => void; onRequired?: (id: string, req: boolean) => void;
+  initial?: Record<string, unknown>; redirectUrl?: string; allowAnother?: boolean;
 }) {
-  const [vals, setVals] = useState<Record<string, unknown>>({});
+  const [vals, setVals] = useState<Record<string, unknown>>(initial ?? {});
   const [err, setErr] = useState(""); const [done, setDone] = useState(false); const [busy, setBusy] = useState(false);
-  const inp: React.CSSProperties = { width: "100%", minHeight: 36, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "6px 10px" };
-  if (done) return <div style={{ padding: 32, textAlign: "center" }}><h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>Thank you</h2><p>{successMessage || "Your response has been recorded."}</p><button type="button" className="p-tbtn" style={{ marginTop: 16 }} onClick={() => { setVals({}); setDone(false); }}>Submit another response</button></div>;
+  const [page, setPage] = useState(0);
+  const items = fields as FormItem[];
+  const shown = visibleItems(items, vals);
+  const pages = pagesOf(items).map((pg) => pg.filter((it) => shown.has(it.fieldId))).filter((pg) => pg.length);
+  const cur = Math.min(page, Math.max(0, pages.length - 1));
+  const last = cur >= pages.length - 1;
+  const inp: React.CSSProperties = { width: "100%", minHeight: 40, border: "1px solid var(--color-border)", borderRadius: 8, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "8px 12px", boxSizing: "border-box" };
+  const label = (it: FormField) => it.label || it.f.name;
+  if (done) return (
+    <div style={{ padding: 40, textAlign: "center" }} role="status">
+      <div className="fb-done" aria-hidden><Check size={26} /></div>
+      <h2 style={{ fontSize: 22, fontWeight: 700, margin: "12px 0 8px" }}>Thank you</h2><p style={{ whiteSpace: "pre-wrap" }}>{successMessage || "Your response has been recorded."}</p>
+      {allowAnother && <button type="button" className="p-tbtn" style={{ marginTop: 16 }} onClick={() => { setVals(initial ?? {}); setPage(0); setDone(false); }}>Submit another response</button>}
+    </div>
+  );
+  const check = (pg: FormItem[]) => { const m = missingRequired(pg, vals, shown); if (m.length) { setErr(`Please answer: ${m.map((x) => label(fields.find((f) => f.fieldId === x.fieldId)!)).join(", ")}`); document.getElementById(`ff-${m[0].fieldId}`)?.focus(); return false; } setErr(""); return true; };
   return (
-    <form style={{ padding: 28 }} onSubmit={async (e) => {
-      e.preventDefault(); setErr("");
-      const missing = fields.filter((x) => x.required && (vals[x.fieldId] === undefined || vals[x.fieldId] === "" || vals[x.fieldId] === null || (Array.isArray(vals[x.fieldId]) && !(vals[x.fieldId] as unknown[]).length)));
-      if (missing.length) { setErr(`Please fill in: ${missing.map((m) => m.f.name).join(", ")}`); return; }
-      setBusy(true); const r = await onSubmit(vals); setBusy(false);
-      if (r) setErr(r); else setDone(true);
+    <form style={{ padding: 28 }} noValidate onSubmit={async (e) => {
+      e.preventDefault();
+      if (!last) { if (check(pages[cur] ?? [])) setPage(cur + 1); return; }
+      if (!check(items)) return;
+      setBusy(true); const r = await onSubmit(cleanAnswers(items, vals)); setBusy(false);
+      if (r) { setErr(r); return; }
+      const go = safeRedirect(redirectUrl); if (go) { window.location.href = go; return; }
+      setDone(true);
     }}>
       {onTitle ? <input aria-label="Form title" defaultValue={title} onBlur={(e) => e.target.value !== title && onTitle(e.target.value)} style={{ fontSize: 24, fontWeight: 700, border: 0, background: "transparent", color: "inherit", width: "100%", marginBottom: 6 }} />
         : <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>{title}</h1>}
       {onDescription ? <textarea aria-label="Form description" className="p-textarea" rows={2} defaultValue={description ?? ""} placeholder="Add a description" onBlur={(e) => e.target.value !== (description ?? "") && onDescription(e.target.value)} style={{ marginBottom: 16 }} />
-        : description ? <p style={{ color: "var(--color-text-secondary)", marginBottom: 16, whiteSpace: "pre-wrap" }}>{description}</p> : null}
-      {fields.map(({ f, fieldId, required, help }) => (
-        <div key={fieldId} style={{ marginBottom: 18 }}>
-          <label htmlFor={`ff-${fieldId}`} style={{ display: "flex", gap: 6, fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{f.name}{required && <span style={{ color: "var(--color-text-red)" }} aria-label="required">*</span>}
-            {onRequired && <span style={{ marginLeft: "auto", fontWeight: 400, fontSize: 12 }}><label><input type="checkbox" checked={!!required} onChange={(e) => onRequired(fieldId, e.target.checked)} /> Required</label></span>}</label>
-          {(help || f.description) && <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{help || f.description}</div>}
-          <FormInput id={`ff-${fieldId}`} f={f} value={vals[fieldId]} onChange={(v) => setVals((s) => ({ ...s, [fieldId]: v }))} style={inp} />
+        : description && cur === 0 ? <p style={{ color: "var(--color-text-secondary)", marginBottom: 16, whiteSpace: "pre-wrap" }}>{description}</p> : null}
+      {pages.length > 1 && <div className="fb-progress" aria-label={`Page ${cur + 1} of ${pages.length}`}><span style={{ width: `${((cur + 1) / pages.length) * 100}%` }} /><small>Page {cur + 1} of {pages.length}</small></div>}
+      {(pages[cur] ?? []).map((it) => { const ff = fields.find((x) => x.fieldId === it.fieldId)!; return (
+        <div key={it.fieldId} style={{ marginBottom: 20 }}>
+          <label htmlFor={`ff-${it.fieldId}`} style={{ display: "flex", gap: 6, fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{label(ff)}{ff.required && <span style={{ color: "var(--color-text-red)" }} aria-label="required">*</span>}</label>
+          {(ff.help || ff.f.description) && <div style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 6 }}>{ff.help || ff.f.description}</div>}
+          <FormInput id={`ff-${it.fieldId}`} f={ff.f} value={vals[it.fieldId]} placeholder={ff.placeholder} onChange={(v) => setVals((s) => ({ ...s, [it.fieldId]: v }))} style={inp} />
         </div>
-      ))}
+      ); })}
+      {!pages.length && <p style={{ color: "var(--color-text-secondary)" }}>This form has no questions yet.</p>}
       {err && <p role="alert" style={{ color: "var(--color-text-error)", marginBottom: 12 }}>{err}</p>}
-      <button type="submit" disabled={busy} style={{ height: 40, padding: "0 20px", borderRadius: 8, border: 0, background: "var(--color-accent)", color: "#fff", font: "inherit", fontWeight: 600, cursor: "pointer" }}>{busy ? "Submitting…" : submitLabel || "Submit"}</button>
+      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        {cur > 0 && <button type="button" className="p-tbtn" style={{ height: 40, padding: "0 16px" }} onClick={() => { setErr(""); setPage(cur - 1); }}><ChevronLeft size={15} />Back</button>}
+        <button type="submit" disabled={busy || !pages.length} style={{ height: 42, padding: "0 22px", borderRadius: 8, border: 0, background: "var(--color-accent)", color: "#fff", font: "inherit", fontWeight: 600, cursor: "pointer" }}>{busy ? "Submitting…" : last ? submitLabel || "Submit" : <>Next <ChevronRight size={15} style={{ verticalAlign: -3 }} /></>}</button>
+      </div>
     </form>
   );
 }
 
-function FormInput({ id, f, value, onChange, style }: { id: string; f: ClientField; value: unknown; onChange: (v: unknown) => void; style: React.CSSProperties }) {
+function FormInput({ id, f, value, onChange, style, placeholder }: { id: string; f: ClientField; value: unknown; onChange: (v: unknown) => void; style: React.CSSProperties; placeholder?: string }) {
+  const ph = placeholder ? { placeholder } : {};
   switch (f.type) {
-    case "longText": return <textarea id={id} rows={4} style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+    case "longText": return <textarea id={id} rows={4} style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
     case "checkbox": return <input id={id} type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />;
     case "singleSelect": return <select id={id} style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value || null)}><option value="">Choose…</option>{f.options.choices?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>;
     case "multipleSelects": { const cur = (value as string[]) ?? []; return <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{f.options.choices?.map((c) => <label key={c.id} className={`chip ${c.color}`} style={{ cursor: "pointer" }}><input type="checkbox" checked={cur.includes(c.id)} onChange={() => onChange(cur.includes(c.id) ? cur.filter((x) => x !== c.id) : [...cur, c.id])} /> {c.name}</label>)}</div>; }
     case "date": return <input id={id} type={f.options.includeTime ? "datetime-local" : "date"} style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
     case "dateTime": return <input id={id} type="datetime-local" style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
     case "rating": { const max = f.options.max ?? 5; return <span className="stars" style={{ fontSize: 22, cursor: "pointer" }}>{Array.from({ length: max }, (_, i) => <span key={i} role="button" aria-label={`${i + 1} stars`} tabIndex={0} className={i < Number(value ?? 0) ? "" : "off"} onClick={() => onChange(i + 1)}>★</span>)}</span>; }
-    case "number": case "currency": case "percent": case "duration": return <input id={id} inputMode="decimal" style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
-    case "email": return <input id={id} type="email" style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
-    case "url": return <input id={id} type="url" style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
-    case "phone": return <input id={id} type="tel" style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+    case "number": case "currency": case "percent": case "duration": return <input id={id} inputMode="decimal" style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+    case "email": return <input id={id} type="email" style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+    case "url": return <input id={id} type="url" style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+    case "phone": return <input id={id} type="tel" style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
     case "link": case "user": return <p style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Linked records can be added after submission.</p>;
-    default: return <input id={id} style={style} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+    default: return <input id={id} style={style} {...ph} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
   }
 }

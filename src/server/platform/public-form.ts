@@ -10,6 +10,7 @@ import { isComputed, type FieldDefLite } from "@/lib/platform/fields";
 import { contextForUser } from "../auth/sessions";
 import { invalid, notFound } from "../errors";
 import { createRecords } from "./records";
+import { cleanAnswers, formClosed, missingRequired, safeRedirect, type FormItem } from "@/lib/platform/form-logic";
 import { asLite } from "./schema";
 
 const BLOCKED = new Set(["attachment", "aiText", "button", "link", "user"]);
@@ -26,11 +27,12 @@ export async function loadPublicForm(token: string) {
   // Only fields everyone may see and editors may edit, that are user-enterable.
   const usable = all.filter((f) => !f.permissions?.hiddenBelow && (!f.permissions?.edit || f.permissions.edit === "editor") && !isComputed(f.type) && !BLOCKED.has(f.type));
   const cfg = v.config.form ?? {};
-  const chosen = (cfg.fields?.length ? cfg.fields : usable.slice(0, 8).map((f) => ({ fieldId: f.id, required: f.id === t.primaryFieldId }))).filter((c) => usable.some((f) => f.id === c.fieldId));
+  const chosen: FormItem[] = (cfg.fields?.length ? cfg.fields : usable.slice(0, 8).map((f) => ({ fieldId: f.id, required: f.id === t.primaryFieldId }))).filter((c) => usable.some((f) => f.id === c.fieldId));
   return {
     view: v, table: t,
     form: {
       title: cfg.title || v.name, description: cfg.description ?? "", submitLabel: cfg.submitLabel, successMessage: cfg.successMessage, color: b.color,
+      closed: formClosed(cfg), redirectUrl: safeRedirect(cfg.redirectUrl), allowAnother: cfg.allowAnother !== false,
       fields: chosen.map((c) => ({ ...c, f: usable.find((f) => f.id === c.fieldId)! as FieldDefLite })),
     },
   };
@@ -41,6 +43,7 @@ export async function submitPublicForm(token: string, values: Record<string, unk
   if (!view.createdBy) throw invalid("This form has no owner and can't accept responses.");
   const owner = await contextForUser(view.createdBy, view.orgId);
   if (!owner) throw invalid("This form's owner no longer has access, so it can't accept responses.");
+  if (form.closed) throw invalid("This form is closed and no longer accepts responses.");
   const allowed = new Map(form.fields.map((x) => [x.fieldId, x]));
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(values ?? {})) {
@@ -48,12 +51,16 @@ export async function submitPublicForm(token: string, values: Record<string, unk
     if (typeof v === "string" && v.length > 20_000) throw invalid("An answer is too long.");
     clean[k] = v;
   }
-  for (const x of form.fields) if (x.required && (clean[x.fieldId] === undefined || clean[x.fieldId] === "" || clean[x.fieldId] === null)) throw invalid(`${x.f.name} is required.`);
+  // Conditional logic is re-checked here: answers to hidden questions are dropped; required only applies when shown.
+  const items = form.fields as unknown as FormItem[];
+  const missing = missingRequired(items, clean);
+  if (missing.length) { const m = items.find((x) => x.fieldId === missing[0].fieldId); throw invalid(`${m?.label || form.fields.find((x) => x.fieldId === missing[0].fieldId)!.f.name} is required.`); }
+  const answers = cleanAnswers(items, clean);
   // Throttle: at most 30 public submissions per table per minute.
   const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(recordRevisions)
     .where(and(eq(recordRevisions.tableId, table.id), eq(recordRevisions.actorLabel, "Public form"), gt(recordRevisions.at, new Date(Date.now() - 60_000))));
   if (n >= 30) throw invalid("This form is receiving a lot of responses. Please try again in a minute.");
   const ctx = { ...owner, name: "Public form", platformRole: "editor" };
-  const [id] = await createRecords(ctx, table.id, [clean], { skipPermission: true, origin: "user" });
+  const [id] = await createRecords(ctx, table.id, [answers], { skipPermission: true, origin: "user", formViewId: view.id });
   return { id };
 }

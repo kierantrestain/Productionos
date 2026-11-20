@@ -56,7 +56,7 @@ async function nextAutonumber(tx: Tx, tableId: string) {
   return seq;
 }
 
-export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], opts: { tx?: Tx; afterRecordId?: string; origin?: "user" | "import" | "system"; skipPermission?: boolean; automationDepth?: number } = {}) {
+export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], opts: { tx?: Tx; afterRecordId?: string; origin?: "user" | "import" | "system"; skipPermission?: boolean; automationDepth?: number; formViewId?: string } = {}) {
   const run = async (tx: Tx) => {
     const { table, access } = await tableContext(ctx, tableId, tx);
     if (!opts.skipPermission) { requireRole(access, table.permissions?.create ?? "editor", "add records to this table"); }
@@ -73,7 +73,7 @@ export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], o
       const [r] = await tx.insert(baseRecords).values({ orgId: ctx.orgId, tableId, data: vals, autonumber: seq, sortOrder, createdBy: ctx.userId, updatedBy: ctx.userId }).returning();
       for (const f of fields.filter((x) => x.type === "link" && x.id in vals)) await syncInverse(tx, f, r.id, [], (vals[f.id] as string[]) ?? []);
       await tx.insert(recordRevisions).values({ orgId: ctx.orgId, recordId: r.id, tableId, action: "create", changes: Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, { from: null, to: v }])), actorUserId: ctx.userId, actorLabel: ctx.name });
-      await emit(tx, { orgId: ctx.orgId, type: "record.created", entityType: "base_records", entityId: r.id, idempotencyKey: `record.created:${r.id}`, origin: opts.origin ?? "user", actorUserId: ctx.userId, payload: { tableId, baseId: table.baseId, values: vals, depth: opts.automationDepth ?? 0 } });
+      await emit(tx, { orgId: ctx.orgId, type: "record.created", entityType: "base_records", entityId: r.id, idempotencyKey: `record.created:${r.id}`, origin: opts.origin ?? "user", actorUserId: ctx.userId, payload: { ...(opts.formViewId ? { formViewId: opts.formViewId } : {}), tableId, baseId: table.baseId, values: vals, depth: opts.automationDepth ?? 0 } });
       created.push(r.id);
     }
     if (created.length > 1) await audit(tx, ctx, "create_records", "base_tables", tableId, { meta: { count: created.length } });
