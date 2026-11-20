@@ -38,3 +38,16 @@ Bases 3/3 · tables 149/149 · fields 3,147/3,147 · records 2,445/2,445 · link
 - File storage in production is the database provider; S3/R2 credentials required for large files.
 - Views still compute whole tables server-side (linear ≈ 8 ms per 1,000 rows); SQL push-down is next.
 - Imported Airtable interface pages are inventoried, not rebuilt as apps; automations stay off until reviewed.
+
+## Connected apps (Composio) and Sign in with ChatGPT — configuration
+
+Built, tested with MOCK-ONLY fetchers (no live Composio/OpenAI traffic from this environment):
+
+| Variable | Purpose |
+|---|---|
+| `COMPOSIO_API_KEY` | Enables connecting apps (Composio-managed sign-in), pulling data in, and agent app tools. Optional `COMPOSIO_API_BASE` (default `https://backend.composio.dev/api/v3`). |
+| `OPENAI_SIWC_CLIENT_ID` | OpenAI-issued client ID for Sign in with ChatGPT (offered to selected partners). Register callback `https://<your-domain>/api/connect/chatgpt/callback`. Optional: `OPENAI_SIWC_CLIENT_SECRET`, `OPENAI_SIWC_SCOPES` (default `openid email profile offline_access`), `OPENAI_SIWC_RESOURCE`, `OPENAI_SIWC_API_BASE` (default `https://api.openai.com/v1`), `OPENAI_SIWC_MODEL` (default `gpt-5`). Use the values OpenAI's partner documentation gives you. |
+| `SECRET_ENCRYPTION_KEY` | Required to store ChatGPT tokens (encrypted at rest). |
+
+Unverified until a live run: Composio v3 paths for toolkits/auth configs/tool execution, and the exact
+scopes/resource OpenAI requires for plan usage. These are configuration, not code changes.

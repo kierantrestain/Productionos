@@ -80,7 +80,7 @@ describe("Account settings", () => {
   });
   it("integration status is computed, never assumed", () => {
     const s = systemStatus();
-    expect(s.map((x) => x.key)).toEqual(["ai", "secrets", "mail", "storage", "slack", "jobs"]);
+    expect(s.map((x) => x.key)).toEqual(["ai", "secrets", "mail", "storage", "slack", "composio", "chatgpt", "jobs"]);
     expect(s.every((x) => typeof x.ok === "boolean" && x.detail.length > 0)).toBe(true);
   });
 });

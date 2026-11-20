@@ -127,6 +127,8 @@ export function systemStatus() {
     { key: "mail", name: "Email delivery", ok: mail.enabled, detail: mail.enabled ? `Provider: ${mail.provider}.` : `Not sending: ${mail.reason}. Messages are drafted and blocked, never sent.` },
     { key: "storage", name: "File storage", ok: st.durable, detail: st.note },
     { key: "slack", name: "Slack notifications", ok: /^https:\/\/hooks\.slack\.com\//.test(process.env.SLACK_WEBHOOK_URL ?? ""), detail: /^https:\/\/hooks\.slack\.com\//.test(process.env.SLACK_WEBHOOK_URL ?? "") ? "Automations can post to your Slack channel." : "Not configured: set SLACK_WEBHOOK_URL (a Slack incoming-webhook URL). Slack steps are skipped and logged until then." },
+    { key: "composio", name: "App connections (Composio)", ok: !!process.env.COMPOSIO_API_KEY, detail: process.env.COMPOSIO_API_KEY ? "People can connect their apps, pull data in and let agents use them." : "Not configured: set COMPOSIO_API_KEY. The app catalogue shows, but connecting is disabled." },
+    { key: "chatgpt", name: "Sign in with ChatGPT", ok: !!process.env.OPENAI_SIWC_CLIENT_ID && enc, detail: process.env.OPENAI_SIWC_CLIENT_ID ? (enc ? "People can connect their ChatGPT plan for agents." : "Client ID set, but SECRET_ENCRYPTION_KEY is missing so tokens can't be stored.") : "Not configured: needs an OpenAI-issued client ID (OPENAI_SIWC_CLIENT_ID); OpenAI offers this to selected partners." },
     { key: "jobs", name: "Scheduled jobs", ok: !!process.env.CRON_SECRET, detail: process.env.CRON_SECRET ? "Job endpoint is protected; schedules run when the scheduler calls it." : "CRON_SECRET not set: scheduled automations only run when triggered manually." },
   ];
 }

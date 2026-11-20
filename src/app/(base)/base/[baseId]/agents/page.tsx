@@ -14,7 +14,7 @@ export default async function AgentsPage({ params, searchParams }: { params: Pro
   const thread = t && threads.some((x) => x.id === t) ? await getThread(ctx, t) : null;
   const approvals = await listApprovals(ctx, baseId);
   return <AgentsApp key={`${active?.id}:${t ?? ""}`} meta={meta} ai={aiConfigured()}
-    agents={agents.map((x) => ({ id: x.id, name: x.name, emoji: x.emoji, color: x.color, role: x.role, instructions: x.instructions, tableIds: x.tableIds, canPropose: x.canPropose }))}
+    agents={agents.map((x) => ({ id: x.id, name: x.name, emoji: x.emoji, color: x.color, role: x.role, instructions: x.instructions, tableIds: x.tableIds, canPropose: x.canPropose, provider: x.provider }))}
     activeId={active?.id ?? null} threads={threads.map((x) => ({ id: x.id, title: x.title, updatedAt: x.updatedAt.toISOString() }))}
     threadId={thread?.thread.id ?? null} items={thread?.items ?? []} proposals={thread?.proposals.map((p) => ({ ...p, result: (p.result ?? null) as Record<string, unknown> | null })) ?? []}
     pendingCount={approvals.filter((x) => x.status === "pending").length} />;

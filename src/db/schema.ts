@@ -1379,6 +1379,8 @@ export const baseAgents = pgTable("base_agents", {
   instructions: text("instructions").notNull().default(""),
   tableIds: jsonb("table_ids").$type<string[]>().notNull().default([]),
   canPropose: boolean("can_propose").notNull().default(true),
+  /** "claude" (workspace AI key) or "chatgpt" (the chatting person's own ChatGPT plan via Sign in with ChatGPT). */
+  provider: text("provider").notNull().default("claude"),
 });
 
 export const agentThreads = pgTable("agent_threads", {
@@ -1491,3 +1493,18 @@ export const automationWaits = pgTable("automation_waits", {
   finishedAt: ts("finished_at"),
   error: text("error"),
 }, (t) => [index("automation_waits_due").on(t.status, t.runAt)]);
+
+/** Personal connections to outside accounts (e.g. a person's ChatGPT plan). Tokens are encrypted at rest. */
+export const userConnections = pgTable("user_connections", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  accountLabel: text("account_label"),
+  accessTokenEnc: text("access_token_enc").notNull(),
+  refreshTokenEnc: text("refresh_token_enc"),
+  expiresAt: ts("expires_at"),
+  scopes: text("scopes"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  updatedAt: ts("updated_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("user_connections_one").on(t.orgId, t.userId, t.provider)]);

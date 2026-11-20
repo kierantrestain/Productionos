@@ -12,7 +12,7 @@ import type { BaseMeta } from "@/app/(base)/base/[baseId]/load";
 import { BaseHeader } from "./base-header";
 import { confirmDialog } from "@/components/ui/dialogs";
 
-type Agent = { id: string; name: string; emoji: string; color: string; role: string | null; instructions: string; tableIds: string[]; canPropose: boolean };
+type Agent = { id: string; name: string; emoji: string; color: string; role: string | null; instructions: string; tableIds: string[]; canPropose: boolean; provider?: string };
 type Item = { id: string; kind: "user" | "assistant" | "activity"; text: string };
 type Proposal = { id: string; kind: string; summary: string; status: string; result: Record<string, unknown> | null };
 const inp: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 8px" };
@@ -99,7 +99,7 @@ export function AgentsApp({ meta, ai, agents, activeId, threads, threadId, items
               <div className="p-toolbar">
                 <span style={{ fontSize: 20 }} aria-hidden>{active.emoji}</span>
                 <strong>{active.name}</strong>
-                <span className="chip">{active.canPropose ? "proposes changes · you approve" : "read-only"}</span>
+                <span className="chip">{active.canPropose ? "proposes changes · you approve" : "read-only"}</span>{active.provider === "chatgpt" && <span className="chip">runs on your ChatGPT plan</span>}
                 <span className="chip">{active.tableIds.length ? `${active.tableIds.length} table${active.tableIds.length > 1 ? "s" : ""}` : "all tables"}</span>
                 <span style={{ flex: 1 }} />
                 {meta.canEdit && <button type="button" className="p-tbtn" onClick={() => setEdit(active)}><Pencil size={14} />Edit</button>}
@@ -162,11 +162,17 @@ function AgentDialog({ meta, initial, onClose, onSaved }: { meta: BaseMeta; init
         {meta.tables.map((t) => { const on = a.tableIds.includes(t.id); return <button key={t.id} type="button" className={`chip ${on ? "blue" : ""}`} style={{ border: 0, cursor: "pointer" }} onClick={() => setA({ ...a, tableIds: on ? a.tableIds.filter((x) => x !== t.id) : [...a.tableIds, t.id] })}>{t.name}</button>; })}
       </div>
       <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>{a.tableIds.length ? "" : "None selected = all tables. "}Agents always read with the chatting person&apos;s own permissions, so hidden fields stay hidden.</p>
+      <label style={{ display: "grid", gap: 4, marginTop: 12, fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)" }}>Runs on
+        <select className="ui-input" value={a.provider ?? "claude"} onChange={(e) => setA({ ...a, provider: e.target.value })}>
+          <option value="claude">Workspace AI (Claude, the workspace&apos;s key)</option>
+          <option value="chatgpt">The ChatGPT plan of whoever is chatting (they connect it in Settings → Connected apps)</option>
+        </select>
+      </label>
       <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}><input type="checkbox" checked={a.canPropose} onChange={(e) => setA({ ...a, canPropose: e.target.checked })} />Can propose changes (create, update, comment) — each one needs a person&apos;s approval</label>
       {err && <p style={{ color: "var(--color-text-error)", marginTop: 10 }}>{err}</p>}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
         <Button label="Cancel" onClick={onClose} />
-        <Button label="Save agent" variant="primary" clickAction={async () => { const r = await saveAgentAction(meta.base.id, { id: a.id || undefined, name: a.name, emoji: a.emoji, color: a.color, role: a.role ?? undefined, instructions: a.instructions, tableIds: a.tableIds, canPropose: a.canPropose }); if (!r.ok) setErr(r.error); else onSaved(r.data.id); }} />
+        <Button label="Save agent" variant="primary" clickAction={async () => { const r = await saveAgentAction(meta.base.id, { id: a.id || undefined, name: a.name, emoji: a.emoji, color: a.color, role: a.role ?? undefined, instructions: a.instructions, tableIds: a.tableIds, provider: a.provider ?? "claude", canPropose: a.canPropose }); if (!r.ok) setErr(r.error); else onSaved(r.data.id); }} />
       </div>
       </div>
     </Dialog>

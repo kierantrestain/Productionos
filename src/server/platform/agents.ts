@@ -18,6 +18,8 @@ import { atLeast, baseAccess, requireRole } from "./access";
 import { fileApproval } from "./approvals";
 import { runView } from "./query";
 import { aiConfigured } from "./ai";
+import { composioConfigured, isReadTool, listAppTools, myConnections, runAppTool } from "../integrations/composio";
+import { chatgptResponses } from "../integrations/chatgpt";
 
 const MODEL = "claude-opus-5-5";
 const MAX_STEPS = 8;
@@ -38,13 +40,13 @@ export async function listAgents(ctx: Ctx, baseId: string) {
   await baseAccess(ctx, baseId);
   return db.select().from(baseAgents).where(and(eq(baseAgents.baseId, baseId), eq(baseAgents.orgId, ctx.orgId), isNull(baseAgents.archivedAt))).orderBy(asc(baseAgents.createdAt));
 }
-export async function saveAgent(ctx: Ctx, baseId: string, input: { id?: string; name: string; emoji?: string; color?: string; role?: string; instructions: string; tableIds: string[]; canPropose: boolean }) {
+export async function saveAgent(ctx: Ctx, baseId: string, input: { id?: string; name: string; emoji?: string; color?: string; role?: string; instructions: string; tableIds: string[]; canPropose: boolean; provider?: string }) {
   requireRole(await baseAccess(ctx, baseId), "creator", "manage agents");
   if (!input.name?.trim()) throw invalid("Name the agent.");
   if ((input.instructions ?? "").length > 8000) throw invalid("Keep instructions under 8,000 characters.");
   const tables = await db.select({ id: baseTables.id }).from(baseTables).where(and(eq(baseTables.baseId, baseId), isNull(baseTables.archivedAt)));
   const tableIds = (input.tableIds ?? []).filter((t) => tables.some((x) => x.id === t));
-  const values = { name: input.name.trim().slice(0, 60), emoji: (input.emoji || "🤖").slice(0, 4), color: input.color || "blue", role: input.role?.slice(0, 120) || null, instructions: input.instructions ?? "", tableIds, canPropose: !!input.canPropose, updatedAt: new Date() };
+  const values = { name: input.name.trim().slice(0, 60), emoji: (input.emoji || "🤖").slice(0, 4), color: input.color || "blue", role: input.role?.slice(0, 120) || null, instructions: input.instructions ?? "", tableIds, canPropose: !!input.canPropose, provider: input.provider === "chatgpt" ? "chatgpt" : "claude", updatedAt: new Date() };
   if (input.id) {
     const [row] = await db.update(baseAgents).set(values).where(and(eq(baseAgents.id, input.id), eq(baseAgents.baseId, baseId), eq(baseAgents.orgId, ctx.orgId))).returning();
     if (!row) throw notFound(); await audit(db, ctx, "update_agent", "base_agents", row.id, { meta: { name: row.name } }); return row;
@@ -97,13 +99,16 @@ function describeTool(name: string, input: Record<string, unknown>) {
   if (name === "search_records") return `Searched ${input.table}${input.query ? ` for “${input.query}”` : ""}`;
   if (name === "get_record") return `Opened a record in ${input.table}`;
   if (name === "list_tables") return "Looked at the base structure";
+  if (name === "list_connected_apps") return "Checked your connected apps";
+  if (name === "list_app_actions") return `Looked up what it can do in ${input.app}`;
+  if (name === "use_app") return isReadTool(String(input.action ?? "")) ? `Read from ${String(input.action).split("_")[0].toLowerCase()} (${input.action})` : `Proposed app action ${input.action} — waiting for your approval`;
   if (name.startsWith("propose_")) return `Proposed: ${name.replace("propose_", "").replace("_", " ")} — waiting for your approval`;
   return name;
 }
 
 // ───────── Tools ─────────
 const pairs = { type: "array", items: { type: "object", properties: { field: { type: "string" }, value: { type: "string" } }, required: ["field", "value"], additionalProperties: false } };
-function toolDefs(canPropose: boolean): Anthropic.Beta.Messages.BetaTool[] {
+function toolDefs(canPropose: boolean, apps = false): Anthropic.Beta.Messages.BetaTool[] {
   const t = (name: string, description: string, properties: Record<string, unknown>, required: string[]): Anthropic.Beta.Messages.BetaTool =>
     ({ name, description, strict: true, input_schema: { type: "object", properties, required, additionalProperties: false } }) as Anthropic.Beta.Messages.BetaTool;
   const read = [
@@ -111,8 +116,13 @@ function toolDefs(canPropose: boolean): Anthropic.Beta.Messages.BetaTool[] {
     t("search_records", "Find records in a table. Returns up to `limit` rows (max 25) with ids and field values as text. Use an empty query to list.", { table: { type: "string" }, query: { type: "string" }, limit: { type: "integer" } }, ["table", "query", "limit"]),
     t("get_record", "Get every visible field of one record.", { table: { type: "string" }, record_id: { type: "string" } }, ["table", "record_id"]),
   ];
-  if (!canPropose) return read;
-  return [...read,
+  const appTools = apps ? [
+    t("list_connected_apps", "List the outside apps (Gmail, Slack, HubSpot…) the person you're talking with has connected.", {}, []),
+    t("list_app_actions", "List the actions available for one connected app (by its slug from list_connected_apps). Read actions run immediately; others need the person's approval.", { app: { type: "string" } }, ["app"]),
+    t("use_app", "Run an app action with the person's own connected account. `arguments` is a JSON object as a string, matching the action's parameters. Read-only actions (list/get/search/fetch) run now; anything that sends, creates, changes or deletes is filed for the person's approval instead.", { action: { type: "string" }, arguments: { type: "string" }, reason: { type: "string" } }, ["action", "arguments", "reason"]),
+  ] : [];
+  if (!canPropose) return [...read, ...appTools];
+  return [...read, ...appTools,
     t("propose_create_record", "Propose creating a record. It is NOT created until the user approves. Values are field name → text.", { table: { type: "string" }, values: pairs, reason: { type: "string" } }, ["table", "values", "reason"]),
     t("propose_update_record", "Propose changing fields on a record. It is NOT changed until the user approves.", { table: { type: "string" }, record_id: { type: "string" }, values: pairs, reason: { type: "string" } }, ["table", "record_id", "values", "reason"]),
     t("propose_comment", "Propose adding a comment to a record. It is NOT posted until the user approves.", { record_id: { type: "string" }, body: { type: "string" } }, ["record_id", "body"]),
@@ -148,6 +158,22 @@ async function runTool(tc: ToolCtx, name: string, input: Record<string, unknown>
     if (!v.rows.length) return name === "get_record" ? "Record not found (or not visible to this user)." : "No matching records.";
     return `${v.rows.length} match(es)${v.rows.length > limit ? `, showing ${limit}` : ""}:\n` + v.rows.slice(0, limit).map((r) => `- id ${r.id}: ${v.fields.map((f) => `${f.name}: ${cellText(f, r.values[f.id]) || "—"}`).join("; ")}`).join("\n");
   }
+  if (name === "list_connected_apps") {
+    const cs = (await myConnections(tc.ctx)).filter((c) => c.status === "ACTIVE");
+    return cs.length ? `Connected apps: ${[...new Set(cs.map((c) => c.toolkit))].join(", ")}` : "The person hasn't connected any apps yet. They can connect them in Settings → Connected apps.";
+  }
+  if (name === "list_app_actions") {
+    const tools = await listAppTools(String(input.app ?? ""));
+    return tools.slice(0, 60).map((x) => `- ${x.slug}${x.readOnly ? " (read)" : " (needs approval)"}: ${x.description.slice(0, 160)}`).join("\n") || "No actions found for that app.";
+  }
+  if (name === "use_app") {
+    const action = String(input.action ?? ""); let args: Record<string, unknown> = {};
+    try { args = input.arguments ? JSON.parse(String(input.arguments)) : {}; } catch { throw invalid("`arguments` must be a JSON object string."); }
+    if (isReadTool(action)) { const data = await runAppTool(tc.ctx, action, args); return JSON.stringify(data).slice(0, 12_000); }
+    if (!tc.agent.canPropose) return "This agent is read-only, so it can't ask to run app actions that send or change things. Explain what you would do instead.";
+    const a = await fileApproval({ orgId: tc.ctx.orgId, baseId: tc.agent.baseId, source: "agent", sourceId: tc.agent.id, threadId: tc.threadId, requestedBy: tc.ctx.userId, kind: "app_action", payload: { action, arguments: args }, summary: `${action}: ${String(input.reason ?? "").slice(0, 200)} — runs with your connected account` });
+    return `Proposal ${a.id} filed. Only the person you're talking with can approve it, because it uses their own connected account.`;
+  }
   if (!tc.agent.canPropose) throw forbidden("This agent is read-only.");
   if (!atLeast(tc.role, "editor")) return "The user has read/comment access only, so changes can't be proposed on their behalf. Explain what you would change instead.";
   const base = { orgId: tc.ctx.orgId, baseId: tc.agent.baseId, source: "agent" as const, sourceId: tc.agent.id, threadId: tc.threadId, requestedBy: tc.ctx.userId };
@@ -176,14 +202,14 @@ async function runTool(tc: ToolCtx, name: string, input: Record<string, unknown>
   throw invalid(`Unknown tool ${name}`);
 }
 
-function systemPrompt(agent: typeof baseAgents.$inferSelect, tables: { name: string }[], user: Ctx) {
+function systemPrompt(agent: typeof baseAgents.$inferSelect, tables: { name: string }[], user: Ctx, apps = false) {
   return [
     `You are “${agent.name}”${agent.role ? `, ${agent.role}` : ""}, an AI teammate inside the user's business workspace. You are talking with ${user.name}.`,
     agent.instructions ? `Your instructions from the workspace:\n${agent.instructions}` : "",
     `Tables you can use: ${tables.map((t) => t.name).join(", ")}.`,
     "Ground every statement in records you have looked up with your tools; name the records you used. Never invent figures, names, dates, prices or terms — if data is missing, say so.",
     agent.canPropose ? "You cannot change data directly. To change anything, call a propose_ tool; the user approves or rejects it. Propose only what the user asked for or clearly agreed to." : "You are read-only: explain what should change rather than proposing changes.",
-    "You only work inside this app: you can't send emails or messages, contact people, move money, sign or send contracts.",
+    apps ? "You can read from the person's connected apps. Anything that sends, creates, changes or deletes in an outside app is only a proposal the person must approve. Never move money, sign contracts or message people without that approval." : "You only work inside this app: you can't send emails or messages, contact people, move money, sign or send contracts.",
     "Be concise and practical. Use short lists for multiple items.",
   ].filter(Boolean).join("\n\n");
 }
@@ -206,12 +232,14 @@ export async function sendAgentMessage(ctx: Ctx, agentId: string, threadId: stri
   const messages: Msg[] = history.map((m) => ({ role: m.role, content: m.content }) as Msg);
   const save = async (m: Msg) => { messages.push(m); await db.insert(agentMessages).values({ orgId: ctx.orgId, threadId: tid!, role: m.role, content: m.content as unknown }); };
   await save({ role: "user", content: [{ type: "text", text: body }] });
-  const tools = toolDefs(agent.canPropose);
+  const apps = composioConfigured();
+  const tools = toolDefs(agent.canPropose, apps);
   const tc: ToolCtx = { ctx, role, agent, tables, threadId: tid };
+  const system = systemPrompt(agent, tables, ctx, apps);
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await client().beta.messages.create({
+    const res = agent.provider === "chatgpt" ? await chatgptTurn(ctx, system, tools, messages) : await client().beta.messages.create({
       model: MODEL, max_tokens: 16000, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
-      output_config: { effort: "medium" }, system: systemPrompt(agent, tables, ctx), tools, messages,
+      output_config: { effort: "medium" }, system, tools, messages,
     });
     await save({ role: "assistant", content: res.content } as unknown as Msg);
     if (res.stop_reason === "refusal") break;
@@ -227,4 +255,31 @@ export async function sendAgentMessage(ctx: Ctx, agentId: string, threadId: stri
   }
   await db.update(agentThreads).set({ updatedAt: new Date() }).where(eq(agentThreads.id, tid));
   return { threadId: tid };
+}
+
+/**
+ * One agent step on the chatting person's ChatGPT plan (Responses API). The transcript is stored in one
+ * format (text / tool_use / tool_result blocks) and translated each turn, so agents can switch provider.
+ */
+async function chatgptTurn(ctx: Ctx, system: string, tools: Anthropic.Beta.Messages.BetaTool[], messages: Msg[]) {
+  const input: Record<string, unknown>[] = [];
+  for (const m of messages) {
+    const blocks = typeof m.content === "string" ? [{ type: "text", text: m.content }] : (m.content as unknown as Record<string, unknown>[]);
+    for (const b of blocks) {
+      if (b.type === "text" && String(b.text ?? "").trim()) input.push({ role: m.role, content: String(b.text) });
+      else if (b.type === "tool_use") input.push({ type: "function_call", call_id: String(b.id), name: String(b.name), arguments: JSON.stringify(b.input ?? {}) });
+      else if (b.type === "tool_result") input.push({ type: "function_call_output", call_id: String(b.tool_use_id), output: typeof b.content === "string" ? b.content : JSON.stringify(b.content) });
+    }
+  }
+  const r = await chatgptResponses(ctx, {
+    instructions: system, input, parallel_tool_calls: false,
+    tools: tools.map((t) => ({ type: "function", name: t.name, description: t.description, parameters: (t as { input_schema: unknown }).input_schema, strict: true })),
+  });
+  const content: Record<string, unknown>[] = [];
+  for (const o of r.output ?? []) {
+    if (o.type === "message") for (const c of (o as { content?: { type: string; text?: string }[] }).content ?? []) { if (c.type === "output_text" && c.text) content.push({ type: "text", text: c.text }); }
+    else if (o.type === "function_call") { const f = o as { call_id: string; name: string; arguments: string }; let args: unknown = {}; try { args = JSON.parse(f.arguments || "{}"); } catch { /* keep empty */ } content.push({ type: "tool_use", id: f.call_id, name: f.name, input: args }); }
+  }
+  if (!content.length) content.push({ type: "text", text: "(No reply.)" });
+  return { content, stop_reason: content.some((c) => c.type === "tool_use") ? "tool_use" : "end_turn" } as unknown as Anthropic.Beta.Messages.BetaMessage;
 }

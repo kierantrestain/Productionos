@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
+import { ConnectedApps } from "./connected-apps";
 import { CheckCircle2, ChevronRight, CircleAlert, KeyRound, Keyboard, Monitor, Moon, Palette, Plug, ScrollText, ShieldCheck, Sun, UserRound, Users, Building2 } from "lucide-react";
 import { changePasswordAction, updateProfileAction } from "@/app/hub-actions";
 import { useThemeMode, type Mode } from "@/components/ui/theme-toggle";
@@ -13,11 +14,12 @@ const TABS = [
   { key: "security", label: "Password & sign-in", icon: KeyRound },
   { key: "appearance", label: "Appearance", icon: Palette },
   { key: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
+  { key: "apps", label: "Connected apps", icon: Plug },
   { key: "workspace", label: "Workspace", icon: Building2 },
   { key: "integrations", label: "Integrations & status", icon: Plug, admin: true },
 ] as const;
 
-export function SettingsView({ tab, user, org, admin, status }: { tab?: string; user: { name: string; email: string; role: string }; org: { name: string; isDemo: boolean }; admin: boolean; status: Status | null }) {
+export function SettingsView({ tab, user, org, admin, status, notice, error }: { notice?: string; error?: string; tab?: string; user: { name: string; email: string; role: string }; org: { name: string; isDemo: boolean }; admin: boolean; status: Status | null }) {
   const tabs = TABS.filter((t) => !("admin" in t) || admin);
   const active = tabs.find((t) => t.key === tab)?.key ?? "profile";
   return (
@@ -32,6 +34,7 @@ export function SettingsView({ tab, user, org, admin, status }: { tab?: string; 
           {active === "security" && <Password />}
           {active === "appearance" && <Appearance />}
           {active === "shortcuts" && <Shortcuts />}
+          {active === "apps" && <ConnectedApps notice={notice} error={error} />}
           {active === "workspace" && <Workspace org={org} admin={admin} role={user.role} />}
           {active === "integrations" && status && <Integrations status={status} />}
         </div>

@@ -222,4 +222,19 @@ test.describe.serial("usability", () => {
     await expect(page.getByText("This form is closed.")).toBeVisible();
     await side.getByLabel("Close the form now").uncheck();
   });
+
+  test("Connected apps: catalogue with logos, search, ChatGPT plan card, honest not-configured state", async ({ page }) => {
+    await login(page);
+    await page.goto("/workspace/settings?tab=apps");
+    await expect(page.getByRole("heading", { name: "Bring your tools into Bang On OS" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "ChatGPT plan" })).toContainText("Use your ChatGPT plan");
+    const gmail = page.getByRole("article", { name: "Gmail" });
+    await expect(gmail).toBeVisible();
+    await page.getByRole("textbox", { name: "Search apps" }).fill("hub");
+    await expect(page.getByRole("article", { name: "HubSpot" })).toBeVisible();
+    await expect(page.getByRole("article", { name: "Gmail" })).toHaveCount(0);
+    // without COMPOSIO_API_KEY the page says so and connecting is disabled (nothing pretends to work)
+    await expect(page.getByText(/COMPOSIO_API_KEY/)).toBeVisible();
+    await expect(page.getByRole("article", { name: "HubSpot" }).getByRole("button", { name: "Connect" })).toBeDisabled();
+  });
 });
