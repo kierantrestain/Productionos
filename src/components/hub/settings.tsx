@@ -23,13 +23,7 @@ export function SettingsView({ tab, user, org, admin, status, notice, error }: {
   const tabs = TABS.filter((t) => !("admin" in t) || admin);
   const active = tabs.find((t) => t.key === tab)?.key ?? "profile";
   return (
-    <div className="st">
-      <h1>Settings</h1>
-      <div className="st-grid">
-        <nav className="st-nav" aria-label="Settings sections">
-          {tabs.map((t) => <Link key={t.key} href={`/workspace/settings?tab=${t.key}`} aria-current={active === t.key ? "page" : undefined}><t.icon size={16} />{t.label}</Link>)}
-        </nav>
-        <div className="st-body">
+    <>
           {active === "profile" && <Profile user={user} />}
           {active === "security" && <Password />}
           {active === "appearance" && <Appearance />}
@@ -37,9 +31,7 @@ export function SettingsView({ tab, user, org, admin, status, notice, error }: {
           {active === "apps" && <ConnectedApps notice={notice} error={error} />}
           {active === "workspace" && <Workspace org={org} admin={admin} role={user.role} />}
           {active === "integrations" && status && <Integrations status={status} />}
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 

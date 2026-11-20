@@ -149,7 +149,9 @@ test.describe.serial("usability", () => {
     await page.getByRole("combobox", { name: "Search" }).fill(`${table}: Quick add E2E`);
     await page.getByRole("option", { name: new RegExp(`^Add “Quick add E2E” to ${table}`) }).first().click(); // current base ranks first
     await page.waitForURL(/record=/);
+    await expect(page.getByRole("dialog").first()).toBeVisible(); // the new record opens
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     await page.keyboard.press("Control+k");
     await page.getByRole("combobox", { name: "Search" }).fill("settings");
     const opt = page.getByRole("option", { name: /^Settings/ });
@@ -238,5 +240,27 @@ test.describe.serial("usability", () => {
     // without COMPOSIO_API_KEY the page says so and connecting is disabled (nothing pretends to work)
     await expect(page.getByText(/COMPOSIO_API_KEY/)).toBeVisible();
     await expect(page.getByRole("article", { name: "HubSpot" }).getByRole("button", { name: "Connect" })).toBeDisabled();
+  });
+
+  test("Settings holds members, security, API tokens and the audit log; the AI assistant opens on every screen, scoped to the base", async ({ page }) => {
+    await login(page);
+    await page.goto("/workspace/members");
+    const nav = page.getByRole("navigation", { name: "Settings sections" });
+    for (const name of ["Members & roles", "Security & single sign-on", "API & access tokens", "Audit log", "Profile", "Connected apps"]) await expect(nav.getByRole("link", { name })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Members & roles" })).toHaveAttribute("aria-current", "page");
+    await nav.getByRole("link", { name: "Audit log" }).click();
+    await expect(page).toHaveURL(/\/workspace\/audit/);
+    // assistant: floating button → panel, scoped to the current base, keyboard shortcut toggles
+    const baseId = await firstBase(page);
+    await page.goto(`/base/${baseId}`);
+    await page.getByRole("button", { name: /Ask AI/ }).click();
+    const panel = page.getByRole("dialog", { name: "AI assistant" });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByLabel("Base the assistant works in")).toHaveValue(baseId);
+    await expect(panel).toContainText("Every change waits for you to apply it");
+    await panel.getByRole("button", { name: "Close assistant" }).click();
+    await expect(panel).toHaveCount(0);
+    await page.keyboard.press("Control+j");
+    await expect(page.getByRole("dialog", { name: "AI assistant" })).toBeVisible();
   });
 });

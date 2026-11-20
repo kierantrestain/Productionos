@@ -12,7 +12,7 @@ import { forbidden, invalid, notFound } from "../errors";
 import { atLeast, baseAccess } from "./access";
 import { addComment, createRecords, updateRecord } from "./records";
 
-export type ApprovalKind = "create_record" | "update_record" | "add_comment" | "webhook" | "app_action";
+export type ApprovalKind = "create_record" | "update_record" | "add_comment" | "webhook" | "app_action" | "create_field" | "create_table";
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 let fetcher: Fetcher = (u, i) => fetch(u, i);
 /** Test seam (mock-only). */
@@ -36,7 +36,7 @@ export async function decideApproval(ctx: Ctx, id: string, approve: boolean) {
   if (a.status !== "pending") throw invalid(`This request was already ${a.status}.`);
   const { role } = await baseAccess(ctx, a.baseId);
   // App actions run with the requester's own connected account, so only they can approve them.
-  const mayDecide = a.kind === "app_action" ? a.requestedBy === ctx.userId : a.kind === "webhook" ? atLeast(role, "creator") : atLeast(role, "creator") || (a.requestedBy === ctx.userId && atLeast(role, "editor"));
+  const mayDecide = a.kind === "app_action" ? a.requestedBy === ctx.userId : a.kind === "webhook" || a.kind === "create_field" || a.kind === "create_table" ? atLeast(role, "creator") : atLeast(role, "creator") || (a.requestedBy === ctx.userId && atLeast(role, "editor"));
   if (!mayDecide) throw forbidden(a.kind === "app_action" ? "Only the person whose connected account it uses can approve this." : a.kind === "webhook" ? "Only creators can approve outbound requests." : "You can't approve this request.");
   // Claim atomically so two people can't both execute it.
   const [claimed] = await db.update(baseApprovals).set({ status: approve ? "approved" : "rejected", decidedBy: ctx.userId, decidedAt: new Date() }).where(and(eq(baseApprovals.id, id), eq(baseApprovals.status, "pending"))).returning();
@@ -49,6 +49,18 @@ export async function decideApproval(ctx: Ctx, id: string, approve: boolean) {
     if (a.kind === "create_record") { const [rid] = await createRecords(ctx, String(p.tableId), [p.values as Record<string, unknown>]); result = { recordId: rid }; }
     else if (a.kind === "update_record") { await updateRecord(ctx, String(p.recordId), p.values as Record<string, unknown>); result = { recordId: p.recordId }; }
     else if (a.kind === "add_comment") { const c = await addComment(ctx, String(p.recordId), String(p.body)); result = { commentId: c.id }; }
+    else if (a.kind === "create_field") {
+      const { createField } = await import("./schema");
+      const type = String(p.type) as never; const choices = (p.choices as string[] | undefined) ?? [];
+      const f = await createField(ctx, String(p.tableId), { name: String(p.name), type, options: choices.length ? { choices: choices.map((name) => ({ id: "", name, color: "blue" })) } as never : {} });
+      result = { fieldId: f.id };
+    }
+    else if (a.kind === "create_table") {
+      const { createBaseFromSpec } = await import("./spec");
+      const fields = ((p.fields as { name: string; type: string }[] | undefined) ?? []);
+      const r = await createBaseFromSpec(ctx, { name: String(p.name), tables: [{ name: String(p.name), fields: (fields.length ? fields : [{ name: "Name", type: "singleLineText" }]) as never }] }, { intoBaseId: a.baseId });
+      result = { tableId: Object.values(r.tableIds)[0] };
+    }
     else if (a.kind === "app_action") {
       const { runAppTool } = await import("../integrations/composio");
       const data = await runAppTool(ctx, String(p.action), (p.arguments ?? {}) as Record<string, unknown>);

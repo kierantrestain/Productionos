@@ -29,7 +29,7 @@ export default async function AppRuntimePage({ params, searchParams }: { params:
   const myApps = (await listApps(ctx)).filter((a) => a.publishedVersionId).map((a) => ({ slug: a.slug, name: a.name }));
   const pages = visiblePages(rt);
   return (
-    <AppRuntimeShell app={{ id: rt.app.id, name: rt.app.name, slug: rt.app.slug, description: rt.app.description, audience: rt.app.audience }} version={rt.versionLabel} preview={preview} canBuild={rt.canBuild}
+    <AppRuntimeShell app={{ id: rt.app.id, name: rt.app.name, slug: rt.app.slug, description: rt.app.description, audience: rt.app.audience, baseId: rt.app.baseId }} version={rt.versionLabel} preview={preview} canBuild={rt.canBuild}
       nav={pages.filter((p) => p.kind !== "detail" && !p.hidden).map((p) => ({ id: p.id, title: p.title, slug: p.slug, icon: p.icon, parentId: p.parentId }))}
       currentPageId={page.id} user={{ name: ctx.name, role: rt.role }} apps={myApps}
       header={{ title: page.title, heading: page.heading, subtitle: page.subtitle }}>

@@ -38,7 +38,24 @@ function client(): Client {
 // ───────── Agent CRUD ─────────
 export async function listAgents(ctx: Ctx, baseId: string) {
   await baseAccess(ctx, baseId);
-  return db.select().from(baseAgents).where(and(eq(baseAgents.baseId, baseId), eq(baseAgents.orgId, ctx.orgId), isNull(baseAgents.archivedAt))).orderBy(asc(baseAgents.createdAt));
+  return (await db.select().from(baseAgents).where(and(eq(baseAgents.baseId, baseId), eq(baseAgents.orgId, ctx.orgId), isNull(baseAgents.archivedAt))).orderBy(asc(baseAgents.createdAt))).filter((a) => a.role !== ASSISTANT_ROLE);
+}
+
+// ───────── The always-available Assistant (one per base) ─────────
+export const ASSISTANT_ROLE = "__assistant__";
+/**
+ * The base's built-in assistant: sees every table of THIS base only, reads with the chatting person's own
+ * permissions, and turns every change into a proposal that person applies (or that a creator applies,
+ * for structure changes). Created on first use; it never has more access than the person using it.
+ */
+export async function ensureAssistant(ctx: Ctx, baseId: string) {
+  const access = await baseAccess(ctx, baseId);
+  if (ctx.platformRole === "portal") throw forbidden("The assistant isn't available in client portals.");
+  const [found] = await db.select().from(baseAgents).where(and(eq(baseAgents.baseId, baseId), eq(baseAgents.orgId, ctx.orgId), eq(baseAgents.role, ASSISTANT_ROLE), isNull(baseAgents.archivedAt))).limit(1);
+  if (found) return { agent: found, role: access.role };
+  const [row] = await db.insert(baseAgents).values({ orgId: ctx.orgId, baseId, name: "Assistant", emoji: "✨", color: "blue", role: ASSISTANT_ROLE, tableIds: [], canPropose: true, createdBy: ctx.userId,
+    instructions: "You are the built-in assistant for this base. Answer questions from the records, summarise, find problems (overdue, missing owners, duplicates), and propose precise changes when asked. Prefer one clear proposal per change. Name the records you used." }).returning();
+  return { agent: row, role: access.role };
 }
 export async function saveAgent(ctx: Ctx, baseId: string, input: { id?: string; name: string; emoji?: string; color?: string; role?: string; instructions: string; tableIds: string[]; canPropose: boolean; provider?: string }) {
   requireRole(await baseAccess(ctx, baseId), "creator", "manage agents");
@@ -102,6 +119,8 @@ function describeTool(name: string, input: Record<string, unknown>) {
   if (name === "list_connected_apps") return "Checked your connected apps";
   if (name === "list_app_actions") return `Looked up what it can do in ${input.app}`;
   if (name === "use_app") return isReadTool(String(input.action ?? "")) ? `Read from ${String(input.action).split("_")[0].toLowerCase()} (${input.action})` : `Proposed app action ${input.action} — waiting for your approval`;
+  if (name === "propose_add_field") return `Proposed a new field “${input.name}” — waiting for approval`;
+  if (name === "propose_add_table") return `Proposed a new table “${input.name}” — waiting for approval`;
   if (name.startsWith("propose_")) return `Proposed: ${name.replace("propose_", "").replace("_", " ")} — waiting for your approval`;
   return name;
 }
@@ -126,6 +145,8 @@ function toolDefs(canPropose: boolean, apps = false): Anthropic.Beta.Messages.Be
     t("propose_create_record", "Propose creating a record. It is NOT created until the user approves. Values are field name → text.", { table: { type: "string" }, values: pairs, reason: { type: "string" } }, ["table", "values", "reason"]),
     t("propose_update_record", "Propose changing fields on a record. It is NOT changed until the user approves.", { table: { type: "string" }, record_id: { type: "string" }, values: pairs, reason: { type: "string" } }, ["table", "record_id", "values", "reason"]),
     t("propose_comment", "Propose adding a comment to a record. It is NOT posted until the user approves.", { record_id: { type: "string" }, body: { type: "string" } }, ["record_id", "body"]),
+    t("propose_add_field", "Propose adding a field (column) to a table. Types: singleLineText, longText, number, currency, percent, checkbox, singleSelect, multipleSelects, date, dateTime, email, url, phone, rating. `choices` only for selects (comma separated). Needs creator access to apply.", { table: { type: "string" }, name: { type: "string" }, type: { type: "string" }, choices: { type: "string" }, reason: { type: "string" } }, ["table", "name", "type", "choices", "reason"]),
+    t("propose_add_table", "Propose adding a new table to this base with simple fields (name:type pairs, comma separated, e.g. \"Name:singleLineText, Due:date\"). Needs creator access to apply.", { name: { type: "string" }, fields: { type: "string" }, reason: { type: "string" } }, ["name", "fields", "reason"]),
   ];
 }
 
@@ -191,6 +212,23 @@ async function runTool(tc: ToolCtx, name: string, input: Record<string, unknown>
     const a = await fileApproval({ ...base, kind: "update_record", payload: { recordId: String(input.record_id), values }, summary: `Update “${title}” in ${t.name}: ${Object.entries(values).map(([k, v]) => `${fs.find((f) => f.id === k)?.name} → ${String(v)}`).join(", ").slice(0, 300)} — ${String(input.reason ?? "")}` });
     return `Proposal ${a.id} filed. Tell the user it is waiting for their approval.`;
   }
+  if (name === "propose_add_field" || name === "propose_add_table") {
+    if (!atLeast(tc.role, "creator")) return "Changing the base's structure needs creator access, which this person doesn't have. Suggest they ask a creator.";
+    const OK_T = ["singleLineText", "longText", "number", "currency", "percent", "checkbox", "singleSelect", "multipleSelects", "date", "dateTime", "email", "url", "phone", "rating"];
+    if (name === "propose_add_field") {
+      const t = table(input.table); const type = String(input.type);
+      if (!OK_T.includes(type)) throw invalid(`Unsupported field type “${type}”.`);
+      const choices = String(input.choices ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 50);
+      const fname = String(input.name ?? "").trim().slice(0, 120); if (!fname) throw invalid("Name the field.");
+      const a = await fileApproval({ orgId: tc.ctx.orgId, baseId: tc.agent.baseId, source: "agent", sourceId: tc.agent.id, threadId: tc.threadId, requestedBy: tc.ctx.userId, kind: "create_field", payload: { tableId: t.id, name: fname, type, choices }, summary: `Add field “${fname}” (${type}${choices.length ? `: ${choices.join(", ")}` : ""}) to ${t.name}` });
+      return `Proposal ${a.id} filed — waiting for approval.`;
+    }
+    const tname = String(input.name ?? "").trim().slice(0, 120); if (!tname) throw invalid("Name the table.");
+    const fields = String(input.fields ?? "").split(",").map((x) => { const [n, ty] = x.split(":").map((y) => y.trim()); return { name: n, type: OK_T.includes(ty) ? ty : "singleLineText" }; }).filter((f) => f.name).slice(0, 30);
+    if (fields[0]?.type !== "singleLineText") fields.unshift({ name: "Name", type: "singleLineText" }); // primary field is text
+    const a = await fileApproval({ orgId: tc.ctx.orgId, baseId: tc.agent.baseId, source: "agent", sourceId: tc.agent.id, threadId: tc.threadId, requestedBy: tc.ctx.userId, kind: "create_table", payload: { name: tname, fields }, summary: `Add table “${tname}” with ${fields.map((f) => `${f.name} (${f.type})`).join(", ") || "a Name field"}` });
+    return `Proposal ${a.id} filed — waiting for approval.`;
+  }
   if (name === "propose_comment") {
     const body = String(input.body ?? "").trim(); if (!body) throw invalid("Empty comment.");
     let found = false;
@@ -204,7 +242,7 @@ async function runTool(tc: ToolCtx, name: string, input: Record<string, unknown>
 
 function systemPrompt(agent: typeof baseAgents.$inferSelect, tables: { name: string }[], user: Ctx, apps = false) {
   return [
-    `You are “${agent.name}”${agent.role ? `, ${agent.role}` : ""}, an AI teammate inside the user's business workspace. You are talking with ${user.name}.`,
+    agent.role === ASSISTANT_ROLE ? `You are the Bang On OS assistant for this base. You only know about and can act on this base. You are talking with ${user.name}.` : `You are “${agent.name}”${agent.role ? `, ${agent.role}` : ""}, an AI teammate inside the user's business workspace. You are talking with ${user.name}.`,
     agent.instructions ? `Your instructions from the workspace:\n${agent.instructions}` : "",
     `Tables you can use: ${tables.map((t) => t.name).join(", ")}.`,
     "Ground every statement in records you have looked up with your tools; name the records you used. Never invent figures, names, dates, prices or terms — if data is missing, say so.",
@@ -215,7 +253,7 @@ function systemPrompt(agent: typeof baseAgents.$inferSelect, tables: { name: str
 }
 
 /** Send a user message and run the agent loop. Returns the thread id. */
-export async function sendAgentMessage(ctx: Ctx, agentId: string, threadId: string | null, text: string) {
+export async function sendAgentMessage(ctx: Ctx, agentId: string, threadId: string | null, text: string, opts: { provider?: "claude" | "chatgpt" } = {}) {
   const { agent, role, tables } = await agentContext(ctx, agentId);
   const body = text.trim();
   if (!body || body.length > 8000) throw invalid("Messages must be 1–8,000 characters.");
@@ -237,7 +275,7 @@ export async function sendAgentMessage(ctx: Ctx, agentId: string, threadId: stri
   const tc: ToolCtx = { ctx, role, agent, tables, threadId: tid };
   const system = systemPrompt(agent, tables, ctx, apps);
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = agent.provider === "chatgpt" ? await chatgptTurn(ctx, system, tools, messages) : await client().beta.messages.create({
+    const res = (opts.provider ?? agent.provider) === "chatgpt" ? await chatgptTurn(ctx, system, tools, messages) : await client().beta.messages.create({
       model: MODEL, max_tokens: 16000, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",
       output_config: { effort: "medium" }, system, tools, messages,
     });

@@ -6,6 +6,7 @@ import { Grid2x2, Home, Inbox, LayoutTemplate, Search, Settings } from "lucide-r
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { myWorkCountsAction } from "@/app/hub-actions";
 import { openCommandPalette, CommandPalette } from "./command-palette";
+import { Assistant } from "@/components/hub/assistant";
 
 type Counts = { overdue: number; today: number; soon: number; assigned: number; approvals: number; mentions: number; newMentions: number };
 const SEEN = "bangon:mentionsSeen";
@@ -46,6 +47,7 @@ export function WorkspaceRail({ userName }: { userName: string }) {
       {item("/workspace/settings", "Settings", <Settings size={19} />, path.startsWith("/workspace/settings"))}
       <span className="ws-rail-me ws-rail-hide-m" title={userName} aria-hidden>{userName.split(/\s+/).map((s) => s[0]).join("").slice(0, 2).toUpperCase()}</span>
       <CommandPalette />
+      <Assistant />
     </nav>
   );
 }

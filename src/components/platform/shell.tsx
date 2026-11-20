@@ -10,6 +10,7 @@ import { BaseIcon } from "./icons";
 import { HEAD_BG } from "./base-header";
 import { logoutAction, switchOrgAction } from "@/app/actions";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Assistant } from "@/components/hub/assistant";
 
 export function PlatformShell({ user, org, orgs, bases = [], apps = [], children }: { user: { name: string; email: string; role: string }; org: { id: string; name: string; isDemo: boolean }; orgs: { id: string; name: string; isDemo: boolean }[]; bases?: { id: string; name: string; color: string; icon: string }[]; apps?: { id: string; name: string; href: string }[]; children: React.ReactNode }) {
   const path = usePathname();
@@ -42,16 +43,14 @@ export function PlatformShell({ user, org, orgs, bases = [], apps = [], children
             </SideNavSection>}
             <SideNavSection title="Workspace">
               <SideNavItem label="Production Suite" href="/production" icon={Clapperboard} />
-              <SideNavItem label="Members & roles" href="/workspace/members" icon={Users} isSelected={path.startsWith("/workspace/members")} />
-              {isAdmin && <SideNavItem label="Security & SSO" href="/workspace/security" icon={ShieldCheck} isSelected={path.startsWith("/workspace/security")} />}
-              {isAdmin && <SideNavItem label="Audit log" href="/workspace/audit" icon={ScrollText} isSelected={path.startsWith("/workspace/audit")} />}
-              <SideNavItem label="Settings" href="/workspace/settings" icon={Settings} isSelected={path.startsWith("/workspace/settings")} />
+              <SideNavItem label="Settings" href="/workspace/settings" icon={Settings} isSelected={path.startsWith("/workspace")} />
             </SideNavSection>
           </SideNav>
         }>
         {children}
       </AppShell>
       <CommandPalette />
+      <Assistant />
     </div>
   );
 }

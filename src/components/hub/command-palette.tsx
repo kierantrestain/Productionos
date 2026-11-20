@@ -62,6 +62,7 @@ export function CommandPalette() {
 
   if (!open) return null;
   return (
+    <PaletteLayer onClose={() => setOpen(false)}>
     <div className="cp-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
       <div className="cp" role="dialog" aria-modal="true" aria-label="Search and commands">
         <div className="cp-in"><Search size={18} aria-hidden />
@@ -87,5 +88,13 @@ export function CommandPalette() {
         <div className="cp-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>⌘</kbd><kbd>K</kbd> toggle</span></div>
       </div>
     </div>
+    </PaletteLayer>
   );
+}
+
+/** Puts the palette in the browser's top layer, so it opens above any open dialog (e.g. an expanded record). */
+function PaletteLayer({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const d = ref.current; if (d && !d.open) { try { d.showModal(); } catch { d.setAttribute("open", ""); } } }, []);
+  return <dialog ref={ref} className="cp-layer" aria-label="Search and commands" onCancel={(e) => { e.preventDefault(); onClose(); }}>{children}</dialog>;
 }

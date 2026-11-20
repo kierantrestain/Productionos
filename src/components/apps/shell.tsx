@@ -7,6 +7,7 @@ import { LayoutDashboard, Users, Filter, Briefcase, FileText, Folder, CheckSquar
 import { logoutAction } from "@/app/actions";
 import { CommandPalette, openCommandPalette } from "@/components/hub/command-palette";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { Assistant } from "@/components/hub/assistant";
 
 export const PAGE_ICONS: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
   dashboard: LayoutDashboard, users: Users, funnel: Filter, briefcase: Briefcase, file: FileText, folder: Folder, check: CheckSquare, chart: BarChart3,
@@ -18,7 +19,7 @@ export const PAGE_ICON_NAMES = Object.keys(PAGE_ICONS);
 type NavItem = { id: string; title: string; slug: string; icon?: string; parentId?: string };
 
 export function AppRuntimeShell({ app, version, preview, canBuild, nav, currentPageId, user, apps, header, children }: {
-  app: { id: string; name: string; slug: string; description: string | null; audience: string }; version: string; preview: boolean; canBuild: boolean;
+  app: { id: string; name: string; slug: string; description: string | null; audience: string; baseId?: string }; version: string; preview: boolean; canBuild: boolean;
   nav: NavItem[]; currentPageId: string; user: { name: string; role: string }; apps: { slug: string; name: string }[];
   header: { title: string; heading?: string; subtitle?: string }; children: React.ReactNode;
 }) {
@@ -76,6 +77,7 @@ export function AppRuntimeShell({ app, version, preview, canBuild, nav, currentP
       </div>
       {open && <div className="ap-scrim" onClick={() => setOpen(false)} aria-hidden />}
       {user.role !== "portal" && <CommandPalette />}
+      {user.role !== "portal" && <Assistant defaultBaseId={app.baseId} />}
     </div>
   );
 }
