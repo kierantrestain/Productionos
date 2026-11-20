@@ -1,8 +1,26 @@
-# Bang On Production OS
+# Bang On OS
 
-One independent production operating system for film, television, documentary, commercial and studio formats (panel shows, gameshows, podcasts). It consolidates the **Ovation OS** (68 tables) and **S’appening Production** (22 tables) Airtable bases into a single relational platform. It is not an Airtable clone.
+A no-code OS/app builder: describe or design a business system, get relational data, build screens and
+workflows visually, invite people with the right access, publish, and run it — without editing code.
+The original Production Suite remains as a first-party app; Agency CRM, Production OS and Client Portal
+are built on the same generic app builder.
 
-> **Status (19 Nov 2026):** deployed on Vercel at **https://production-os-peach.vercel.app**, backed by Neon PostgreSQL. Migrations run automatically on every deploy. The first visit opens a one-time setup screen that creates your organisation and admin (optionally with a clearly flagged demo workspace). **Live Airtable migration has not run**: it needs a read-only Airtable token (see `docs/MIGRATION.md`).
+> **Status (20 Nov 2026):** deployed on Vercel at **https://production-os-peach.vercel.app** (Neon PostgreSQL,
+> London). Migrations run on every deploy. See *Release report* below for what is verified and what is blocked.
+
+## The platform
+
+| Area | What it is | Where |
+|---|---|---|
+| **Bases** | Tables, 30 field types, two-way links, lookups, rollups, counts, sandboxed formulas, attachments, buttons; 7 views (grid, kanban, calendar, gallery, timeline, list, form); comments, history, bulk edit, CSV/Excel/JSON/XML export, CSV/Excel import | `src/server/platform/*`, `src/components/platform/*` |
+| **Access** | Workspace roles owner/creator/editor/commenter/reader (+ free portal role), private bases, per-base overrides/deny, table/field/view permissions, SSO (OIDC), audit log, scoped v2 REST API tokens | `access.ts`, `members.ts`, `auth/sso.ts`, `/api/v2` |
+| **App builder** | Pages, nested navigation, 12-column components (KPI, chart, table, kanban, activity, record detail, form, button…), live data bindings, role visibility, autosaved drafts, preview, immutable published versions, rollback; published App mode at `/a/<app>`; client portals scoped per visitor | `src/server/apps/*`, `src/components/builder/*`, `src/components/apps/*` |
+| **AI** | Full-system planner (data + pages + automations → review → revise → approve), AI fields, natural-language filters, in-app agents that propose changes for approval | `server/apps/ai-plan.ts`, `server/platform/ai.ts`, `agents.ts` |
+| **Automations** | Record/schedule/webhook triggers, branches, AI steps, approvals for outbound calls, run logs, retries via the outbox | `server/platform/automations.ts` |
+| **Migration** | Idempotent, resumable importer for the Airtable export pack with reconciliation reports (real data never committed) | `server/migration/airtable-pack`, `docs/AIRTABLE_PACK_IMPORT.md` |
+| **Design** | One Astryx theme (`src/themes/bangon.ts`) for every screen, light/dark, 390–1600 px | `src/app/*.css` |
+
+Performance: `docs/PERFORMANCE.md` (measured at 10k/50k/100k rows). Hourly jobs: `.github/workflows/jobs.yml`.
 
 ## Stack
 
