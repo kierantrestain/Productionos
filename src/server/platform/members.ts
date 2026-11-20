@@ -12,14 +12,14 @@ import { audit } from "../audit";
 import { forbidden, invalid, notFound } from "../errors";
 import { baseAccess, FREE_ROLES, RANK, requireRole } from "./access";
 
-export const PLATFORM_ROLE_LIST = ["owner", "creator", "editor", "commenter", "reader"] as const;
-const PROD_ROLE_FOR: Record<string, string> = { owner: "org_admin", creator: "producer", editor: "production_manager", commenter: "external_reviewer", reader: "external_reviewer" };
+export const PLATFORM_ROLE_LIST = ["owner", "creator", "editor", "commenter", "reader", "portal"] as const;
+const PROD_ROLE_FOR: Record<string, string> = { owner: "org_admin", creator: "producer", editor: "production_manager", commenter: "external_reviewer", reader: "external_reviewer", portal: "external_reviewer" };
 
 export async function listPlatformMembers(ctx: Ctx) {
   if (RANK[ctx.platformRole] < RANK.creator) throw forbidden("Only owners and creators can see the member list.");
   const rows = await db.select({ userId: users.id, name: users.name, email: users.email, platformRole: memberships.platformRole, disabledAt: users.disabledAt, lastLoginAt: users.lastLoginAt })
     .from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, ctx.orgId)).orderBy(asc(users.name));
-  return rows.map((r) => ({ ...r, seat: FREE_ROLES.has(r.platformRole) ? "free" : "paid", disabledAt: r.disabledAt?.toISOString() ?? null, lastLoginAt: r.lastLoginAt?.toISOString() ?? null }));
+  return rows.map((r) => ({ ...r, seat: FREE_ROLES.has(r.platformRole) || r.platformRole === "portal" ? "free" : "paid", disabledAt: r.disabledAt?.toISOString() ?? null, lastLoginAt: r.lastLoginAt?.toISOString() ?? null }));
 }
 
 export async function setPlatformRole(ctx: Ctx, userId: string, role: string) {
@@ -53,7 +53,7 @@ export async function listBaseMembers(ctx: Ctx, baseId: string) {
 
 export async function setBaseMember(ctx: Ctx, baseId: string, userId: string, role: string | null) {
   const a = await baseAccess(ctx, baseId); requireRole(a, "creator", "share this base");
-  if (role && !PLATFORM_ROLE_LIST.includes(role as never)) throw invalid("Unknown role.");
+  if (role && (!PLATFORM_ROLE_LIST.includes(role as never) || role === "portal")) throw invalid("Unknown role.");
   if (role && RANK[role] > RANK[a.role]) throw forbidden("You can't grant more access than you have.");
   const [m] = await db.select().from(memberships).where(and(eq(memberships.orgId, ctx.orgId), eq(memberships.userId, userId))).limit(1);
   if (!m) throw notFound("That person isn't in this workspace.");

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { inviteMemberAction, saveSsoAction, setPlatformRoleAction } from "@/app/platform-actions";
 
-const ROLES = [["owner", "Owner", "Everything, including billing, security and roles"], ["creator", "Creator", "Build bases, tables, fields, views and automations"], ["editor", "Editor", "Add and edit records"], ["commenter", "Commenter (free)", "View and comment"], ["reader", "Reader (free)", "View only"]] as const;
+const ROLES = [["owner", "Owner", "Everything, including billing, security and roles"], ["creator", "Creator", "Build bases, tables, fields, views and automations"], ["editor", "Editor", "Add and edit records"], ["commenter", "Commenter (free)", "View and comment"], ["reader", "Reader (free)", "View only"], ["portal", "Portal client (free)", "Only their own records in published client portals"]] as const;
 const inp: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 8px" };
 const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", margin: "12px 0 4px" };
 const page: React.CSSProperties = { padding: "28px 32px", maxWidth: 1040 };

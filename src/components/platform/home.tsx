@@ -15,11 +15,12 @@ import { DemoLoader } from "@/components/demo-loader";
 import { BASE_ICONS, BaseIcon } from "./icons";
 import { ImportDialog } from "./import-dialog";
 import { AiBuilderDialog } from "./ai-builder";
+import { AppsSection, type AppCard, type AppTpl } from "@/components/apps/apps-home";
 
 type BaseCard = { id: string; name: string; icon: string; color: string; role: string; updatedAt: string };
 type Tpl = { key: string; name: string; description: string; category: string; icon: string; color: string };
 
-export function HomeView({ bases, templates, canCreate, loadDemo }: { bases: BaseCard[]; templates: Tpl[]; canCreate: boolean; loadDemo: boolean }) {
+export function HomeView({ bases, templates, canCreate, loadDemo, apps = [], appTemplates = [] }: { bases: BaseCard[]; templates: Tpl[]; canCreate: boolean; loadDemo: boolean; apps?: AppCard[]; appTemplates?: AppTpl[] }) {
   const [dialog, setDialog] = useState<null | "blank" | "templates" | "import" | "ai">(null);
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1280 }}>
@@ -33,6 +34,8 @@ export function HomeView({ bases, templates, canCreate, loadDemo }: { bases: Bas
           { label: "Import a spreadsheet", icon: <Upload size={16} />, description: "CSV or Excel → a new base", onClick: () => setDialog("import") },
         ]} />}
       </div>
+      <AppsSection apps={apps} templates={appTemplates} canCreate={canCreate} bases={bases.filter((b) => ["owner", "creator"].includes(b.role)).map((b) => ({ id: b.id, name: b.name }))} />
+      <h2 style={{ fontSize: 16, fontWeight: 600, margin: "0 0 12px" }}>Bases</h2>
       {bases.length === 0 ? (
         <EmptyState title="No bases yet" description="A base is a database for one system — a production, a CRM, a content calendar. Start from scratch, a template, a spreadsheet, or describe it to AI."
           actions={canCreate ? <><Button label="Use a template" variant="primary" onClick={() => setDialog("templates")} /><Button label="Build with AI" onClick={() => setDialog("ai")} /></> : undefined} />

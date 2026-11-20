@@ -1413,3 +1413,30 @@ export const baseApprovals = pgTable("base_approvals", {
   decidedAt: ts("decided_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
 }, (t) => [index("base_approvals_base_status").on(t.baseId, t.status)]);
+
+/** Visual applications built on a base: draft config + immutable published versions. */
+export const apps = pgTable("apps", {
+  ...common(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  slug: text("slug").notNull(),
+  icon: text("icon").notNull().default("grid"),
+  color: text("color").notNull().default("blue"),
+  description: text("description"),
+  audience: text("audience").notNull().default("workspace"), // workspace | portal
+  draft: jsonb("draft").$type<Record<string, unknown>>().notNull(),
+  draftRevision: integer("draft_revision").notNull().default(1),
+  publishedVersionId: uuid("published_version_id"),
+  templateKey: text("template_key"),
+}, (t) => [uniqueIndex("apps_org_slug").on(t.orgId, t.slug)]);
+
+export const appVersions = pgTable("app_versions", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  appId: uuid("app_id").notNull().references(() => apps.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+  note: text("note"),
+  publishedBy: uuid("published_by"),
+  publishedAt: ts("published_at").notNull().defaultNow(),
+}, (t) => [uniqueIndex("app_versions_app_version").on(t.appId, t.version)]);

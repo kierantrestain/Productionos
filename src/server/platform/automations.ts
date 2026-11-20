@@ -266,3 +266,16 @@ export async function previewAutomation(ctx: Ctx, baseId: string, input: { trigg
   await executeSteps(ctx, fake, input.trigger.tableId, recordId, input.actions, 0, true, log);
   return { matches, steps: log };
 }
+
+/** Run one enabled automation's steps on a record now (button actions). Same base + editor access required. */
+export async function runAutomationForRecord(ctx: Ctx, automationId: string, recordId: string) {
+  const [a] = await db.select().from(baseAutomations).where(and(eq(baseAutomations.id, automationId), eq(baseAutomations.orgId, ctx.orgId), isNull(baseAutomations.archivedAt))).limit(1);
+  if (!a) throw notFound("Automation not found.");
+  requireRole(await baseAccess(ctx, a.baseId), "editor", "run automations");
+  if (!a.isEnabled) throw invalid("This automation is turned off.");
+  const t = a.trigger as unknown as Trigger;
+  const v = await runView(ctx, "owner", t.tableId, {}, { recordIds: [recordId] });
+  if (!v.rows.length) throw invalid("That record isn't in this automation's table.");
+  await audit(db, ctx, "run_automation_manual", "base_automations", a.id, { meta: { recordId } });
+  return runOne(a, `auto:${a.id}:manual:${recordId}:${Date.now()}`, t.tableId, recordId, 0);
+}

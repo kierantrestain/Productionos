@@ -180,6 +180,11 @@ export async function resetDemoRoleLogins(ctx: Ctx) {
   if (!org?.isDemo) throw forbidden("Role test logins are only available in the demo workspace.");
   const members = await db.select({ userId: users.id, email: users.email, name: users.name, role: memberships.role }).from(memberships)
     .innerJoin(users, eq(users.id, memberships.userId)).where(eq(memberships.orgId, ctx.orgId)).orderBy(asc(memberships.role));
+  // Ensure the demo portal client exists (older demo workspaces predate client portals).
+  if (!members.some((m) => m.email === "client-portal@demo.productionos.test")) {
+    const u = await createUserWithMembership({ orgId: ctx.orgId, role: "external_reviewer", email: "client-portal@demo.productionos.test", name: "Demo Portal Client", platformRole: "portal" });
+    members.push({ userId: u.id, email: u.email, name: u.name, role: "external_reviewer" });
+  }
   const candidates = members.filter((m) => m.userId !== ctx.userId && m.email.endsWith("@demo.productionos.test"));
   const safe: typeof candidates = [];
   for (const m of candidates) {

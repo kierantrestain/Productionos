@@ -25,7 +25,7 @@ export async function seedDemo(opts: { password?: string; reset?: boolean; owner
   if (existing) {
     const complete = (existing.settings as { seedComplete?: boolean } | null)?.seedComplete === true;
     if (complete && !opts.reset) {
-      if (opts.ownerUserId) await db.insert(memberships).values({ orgId: existing.id, userId: opts.ownerUserId, role: "org_admin" }).onConflictDoNothing();
+      if (opts.ownerUserId) await db.insert(memberships).values({ orgId: existing.id, userId: opts.ownerUserId, role: "org_admin", platformRole: "owner" }).onConflictDoNothing();
       return { orgId: existing.id, created: false, password: null as string | null };
     }
     // Incomplete (interrupted) or explicit reset: remove it and rebuild from scratch.
@@ -42,7 +42,7 @@ export async function seedDemo(opts: { password?: string; reset?: boolean; owner
   };
   let admin;
   if (opts.ownerUserId) {
-    await db.insert(memberships).values({ orgId: org.id, userId: opts.ownerUserId, role: "org_admin" }).onConflictDoNothing();
+    await db.insert(memberships).values({ orgId: org.id, userId: opts.ownerUserId, role: "org_admin", platformRole: "owner" }).onConflictDoNothing();
     admin = (await contextForUser(opts.ownerUserId, org.id))!;
   } else admin = await mk("org_admin", "Demo Admin");
   const exec = await mk("executive", "Demo Executive");
@@ -211,6 +211,12 @@ export async function seedDemo(opts: { password?: string; reset?: boolean; owner
   await createFieldDef(admin, { entity: "scenes", label: "Graphics cue ID", type: "text", help: "Reference in the gallery's graphics system" });
   await createFieldDef(admin, { entity: "deliverables", label: "Broadcaster spec version", type: "select", options: ["v1", "v2", "v3"] });
   await createRule(admin, { name: "Chase rejected deliverables", entity: "deliverables", event: "updated", field: "status", value: "rejected", action: { type: "create_task", title: "Fix QC notes: {{title}}", priority: "urgent", dueInDays: 1 } });
+  // Platform demo: a portal client login + the three apps built on the same builder (all fictional demo data).
+  const portalUser = await createUserWithMembership({ orgId: org.id, role: "external_reviewer", email: `client-portal@${DOMAIN}`, name: "Demo Portal Client", password, platformRole: "portal" });
+  void portalUser;
+  const { createAppFromTemplate } = await import("@/server/apps/templates");
+  const platformAdmin = { ...admin, platformRole: "owner" };
+  for (const key of ["agency-crm", "production-os", "client-portal"]) await createAppFromTemplate(platformAdmin, key);
   await db.update(organisations).set({ settings: sql`${organisations.settings} || '{"seedComplete": true}'::jsonb` }).where(eq(organisations.id, org.id));
   return { orgId: org.id, created: true, password };
 }
