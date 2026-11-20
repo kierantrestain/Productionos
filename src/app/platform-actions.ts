@@ -246,6 +246,12 @@ export async function inviteMemberAction(email: string, role: string) {
 export async function setBaseMemberAction(baseId: string, userId: string, role: string | null) {
   return toResult(async () => { const { setBaseMember } = await import("@/server/platform/members"); await setBaseMember(await requireContext(), baseId, userId, role); done(); });
 }
+export async function createPlatformTokenAction(name: string, scopes: string[]) {
+  return toResult(async () => { const { createPlatformToken } = await import("@/server/platform/api-v2"); const r = await createPlatformToken(await requireContext(), name, scopes); done(); return r; });
+}
+export async function revokePlatformTokenAction(id: string) {
+  return toResult(async () => { const { revokePlatformToken } = await import("@/server/platform/api-v2"); await revokePlatformToken(await requireContext(), id); done(); });
+}
 export async function saveSsoAction(input: Parameters<typeof import("@/server/auth/sso").saveSso>[1]) {
   return toResult(async () => { const { saveSso } = await import("@/server/auth/sso"); await saveSso(await requireContext(), input); done(); });
 }
