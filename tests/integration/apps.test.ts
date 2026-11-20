@@ -158,3 +158,43 @@ describe("Production OS template", () => {
     expect(findPage(rt, "productions")).toBeDefined();
   });
 });
+
+describe("AI full-system planner (MOCK-ONLY model)", () => {
+  it("plans, flags inconsistencies, revises, and applies through the shared builder path", async () => {
+    const { __setAiClient } = await import("@/server/platform/ai");
+    const { planSystem, applyPlan, checkPlan } = await import("@/server/apps/ai-plan");
+    const comp = (o: Record<string, unknown>) => ({ width: 12, title: "", table: "", aggregation: "count", field: "", groupBy: "", chart: "bar", format: "number", fields: [], filter: [], relatedVia: "", opensPage: "", text: "", buttonAction: "none", buttonPage: "", buttonSet: [], ...o });
+    const plan = (bad: boolean) => ({
+      name: "Studio Ops", description: "Fictional demo", color: "purple", summary: "Jobs and crew.",
+      tables: [
+        { name: "Jobs", description: "", fields: [{ name: "Job", type: "singleLineText", choices: [], linkTo: "", via: "", target: "", fn: "", formula: "" }, { name: "Status", type: "singleSelect", choices: ["Open", "Done"], linkTo: "", via: "", target: "", fn: "", formula: "" }, { name: "Fee", type: "currency", choices: [], linkTo: "", via: "", target: "", fn: "", formula: "" }], sampleRows: [[{ field: "Job", value: "Example shoot" }, { field: "Status", value: "Open" }, { field: "Fee", value: "1200" }]] },
+        { name: "Crew", description: "", fields: [{ name: "Name", type: "singleLineText", choices: [], linkTo: "", via: "", target: "", fn: "", formula: "" }, { name: "Job", type: "link", choices: [], linkTo: "Jobs", via: "", target: "", fn: "", formula: "" }], sampleRows: [[{ field: "Name", value: "Example camera op" }, { field: "Job", value: "Example shoot" }]] },
+      ],
+      pages: [
+        { key: "home", title: "Dashboard", heading: "Studio Ops", icon: "dashboard", kind: "dashboard", table: "", components: [comp({ type: "kpi", width: 3, title: "Open jobs", table: "Jobs", filter: [{ field: "Status", op: "is", value: "Open" }] }), comp({ type: "kpi", width: 3, title: "Fees", table: "Jobs", aggregation: "sum", field: bad ? "Revenue" : "Fee", format: "currency" }), comp({ type: "table", title: "Jobs", table: "Jobs", fields: ["Job", "Status"], opensPage: "job" })] },
+        { key: "job", title: "Job", heading: "", icon: "file", kind: "detail", table: "Jobs", components: [comp({ type: "record", title: "Job" }), comp({ type: "table", title: "Crew", table: "Crew", fields: ["Name"], relatedVia: "Job" })] },
+      ],
+      automations: [{ name: "Comment on done", table: "Jobs", when: "record_updated", watchField: "Status", filter: [], action: "add_comment", comment: "{Job} done", createIn: "", linkVia: "", set: [] }],
+    });
+    let call = 0; const prompts: string[] = [];
+    __setAiClient({ messages: { parse: async (body: { messages: { content: string }[] }) => { prompts.push(body.messages.at(-1)!.content); call++; return { stop_reason: "end_turn", parsed_output: plan(call === 1) }; } } });
+    const r = await planSystem("A studio operations system");
+    expect(call).toBe(2); // first plan had a bad field reference → one automatic repair round
+    expect(prompts[1]).toMatch(/unknown field “Jobs.Revenue”/);
+    expect(checkPlan(r.plan)).toEqual([]);
+    const rev = await planSystem("A studio operations system", r.plan, "Add a Fee KPI");
+    expect(prompts.at(-1)).toMatch(/Revise the plan with this change/);
+    const built = await applyPlan(owner, rev.plan);
+    const { out } = await pageData(owner, built.slug);
+    expect(out["Open jobs"]).toMatchObject({ value: 1 });
+    expect(out.Fees).toMatchObject({ value: 1200 });
+    const rt = await resolveRuntime(owner, built.slug);
+    const job = rt.config.pages.find((p) => p.slug === "job")!;
+    const jobId = ((out.Jobs as { rows: { id: string }[] }).rows[0]).id;
+    const detail = await componentData({ ctx: owner, rt, page: job, recordId: jobId }, job.components[1]);
+    expect((detail as { rows: unknown[] }).rows).toHaveLength(1);
+    const { listAutomations } = await import("@/server/platform/automations");
+    expect((await listAutomations(owner, built.baseId)).every((a) => !a.isEnabled)).toBe(true);
+    __setAiClient(null);
+  });
+});
