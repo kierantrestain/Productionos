@@ -11,6 +11,7 @@ import type { Conflict } from "@/server/services/conflicts";
 import type { CallSheetSnapshot } from "@/server/services/callsheets";
 import { Drawer, RefSelect, useRun } from "./client";
 import { Icon } from "./icons";
+import { alertDialog, confirmDialog, promptDialog } from "@/components/ui/dialogs";
 
 export interface DayData {
   day: { id: string; date: string; dayNumber: number | null; unit: string; status: string; generalCall: string | null; estWrap: string | null; productionId: string; notes: string | null };
@@ -109,7 +110,7 @@ export function DayCommand({ data, logistics }: { data: DayData; logistics: Reac
                   <select className="select btn-sm" style={{ width: 34, padding: 0 }} aria-label="Move to another day" value="" onChange={(e) => e.target.value && run(moveBlockAction(b.id, e.target.value, null)).then(refresh)}>
                     <option value="">⇄</option>{data.otherDays.map((d) => <option key={d.id} value={d.id}>{date(d.date, { short: true })}{d.dayNumber ? ` (Day ${d.dayNumber})` : ""}</option>)}
                   </select>
-                  <button className="btn btn-quiet btn-sm icon-btn btn-danger" aria-label="Remove from day" onClick={() => idx(b.id) >= 0 && confirm("Remove this block from the day?") && run(removeBlockAction(b.id)).then(refresh)}><Icon name="x" size={14} /></button>
+                  <button className="btn btn-quiet btn-sm icon-btn btn-danger" aria-label="Remove from day" onClick={async () => idx(b.id) >= 0 && (await confirmDialog("Remove this block from the day?", { danger: true, confirmLabel: "Remove" })) && run(removeBlockAction(b.id)).then(refresh)}><Icon name="x" size={14} /></button>
                 </div>}
               </div>
             ))}
@@ -124,14 +125,14 @@ export function DayCommand({ data, logistics }: { data: DayData; logistics: Reac
                 {data.unscheduled.length === 0 && <li className="subtle">Every scene is scheduled.</li>}
               </ul>
               <div className="row" style={{ padding: 12, borderTop: "1px solid var(--border)" }}>
-                {(["meal", "travel", "setup", "company_move"] as const).map((k) => <button key={k} className="btn btn-sm" onClick={() => { const label = prompt(`${humanize(k)} label`, humanize(k)); if (label !== null) run(addBlockAction(day.id, k, label)).then(refresh); }}>+ {humanize(k)}</button>)}
+                {(["meal", "travel", "setup", "company_move"] as const).map((k) => <button key={k} className="btn btn-sm" onClick={async () => { const label = (await promptDialog(`${humanize(k)} label`, humanize(k))); if (label !== null) run(addBlockAction(day.id, k, label)).then(refresh); }}>+ {humanize(k)}</button>)}
               </div>
             </section>}
             <section className="panel" aria-label="Day actions"><div className="panel-head"><h2>Day actions</h2></div>
               <div className="panel-body stack" style={{ gap: 8 }}>
                 {data.canWrite && <button className="btn btn-primary btn-lg" onClick={() => { setAck(false); setIssueOpen(true); }}><Icon name="file" /> Issue call sheet v{(data.callSheets[0]?.versionNumber ?? 0) + 1}</button>}
                 <Link className="btn btn-lg" href={`/schedule/day/${day.id}/preview`}><Icon name="printer" /> Preview live call sheet</Link>
-                {data.canWrite && day.status !== "wrapped" && <button className="btn" disabled={pending || !data.blocks.some((b) => b.sceneId)} onClick={() => confirm("Wrap this day? Scheduled scenes become “shot” and ingest/edit tasks are created in post.") && run(wrapDayAction(day.id), "Handed over to post").then(refresh)}>Wrap & hand over to post</button>}
+                {data.canWrite && day.status !== "wrapped" && <button className="btn" disabled={pending || !data.blocks.some((b) => b.sceneId)} onClick={async () => (await confirmDialog("Wrap this day? Scheduled scenes become “shot” and ingest/edit tasks are created in post.")) && run(wrapDayAction(day.id), "Handed over to post").then(refresh)}>Wrap & hand over to post</button>}
                 {day.status === "wrapped" && <div className="notice ok">Wrapped — post tasks created. <Link href={`/post?production=${day.productionId}`}>Open post</Link></div>}
               </div></section>
           </div>
@@ -156,7 +157,7 @@ export function DayCommand({ data, logistics }: { data: DayData; logistics: Reac
                     ))}
                     <td><input type="checkbox" checked={c.confirmed} disabled={!data.canWrite} aria-label={`Confirmed ${c.name}`} onChange={(e) => run(upsertCallAction(day.id, c.personId, { confirmed: e.target.checked })).then(refresh)} /></td>
                     <td>{data.canCheckIn ? <button className={`btn btn-sm ${c.checkedInAt ? "" : "btn-primary"}`} onClick={() => run(checkInAction(c.id, !!c.checkedInAt)).then(refresh)}>{c.checkedInAt ? `✓ ${new Date(c.checkedInAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : "Check in"}</button> : c.checkedInAt ? "✓" : "—"}</td>
-                    {data.canWrite && <td><button className="btn btn-quiet btn-sm btn-danger" aria-label={`Remove ${c.name}`} onClick={() => confirm(`Remove ${c.name} from the call list?`) && run(removeCallAction(c.id)).then(refresh)}><Icon name="x" size={14} /></button></td>}
+                    {data.canWrite && <td><button className="btn btn-quiet btn-sm btn-danger" aria-label={`Remove ${c.name}`} onClick={async () => (await confirmDialog(`Remove ${c.name} from the call list?`, { danger: true, confirmLabel: "Remove" })) && run(removeCallAction(c.id)).then(refresh)}><Icon name="x" size={14} /></button></td>}
                   </tr>
                 ))}
                 {(tab === "cast" ? castCalls : crewCalls).length === 0 && <tr><td colSpan={8}><div className="empty" style={{ padding: 16 }}>No one on the {tab} call list yet.</div></td></tr>}
@@ -202,7 +203,7 @@ export function DayCommand({ data, logistics }: { data: DayData; logistics: Reac
               <li key={c.id}><strong>v{c.versionNumber}</strong><span className={`badge ${c.status === "issued" ? "tone-ok" : ""}`}>{humanize(c.status)}</span><span className="muted" style={{ flex: 1 }}>{dateTime(c.issuedAt)}{c.notes ? ` · ${c.notes}` : ""}</span>
                 <span className="subtle mono" style={{ fontSize: 11 }} title={c.snapshotHash}>{c.snapshotHash.slice(0, 10)}</span>
                 <Link className="btn btn-sm" href={`/callsheets/${c.id}`}><Icon name="printer" size={14} /> Open</Link>
-                {c.status === "issued" && data.canWrite && <button className="btn btn-sm" onClick={() => run(prepareDistributionAction(c.id)).then((r) => { if (r) { alert(`${r.created} message draft(s) prepared for review in Automations → Outbox. ${r.missingEmail} recipient(s) have no email. Nothing has been sent.`); router.refresh(); } })}>Prepare distribution</button>}
+                {c.status === "issued" && data.canWrite && <button className="btn btn-sm" onClick={() => run(prepareDistributionAction(c.id)).then(async (r) => { if (r) { (await alertDialog(`${r.created} message draft(s) prepared for review in Automations → Outbox. ${r.missingEmail} recipient(s) have no email. Nothing has been sent.`)); router.refresh(); } })}>Prepare distribution</button>}
               </li>))}
             {data.callSheets.length === 0 && <li className="subtle">No call sheet has been issued for this day.</li>}
           </ul>

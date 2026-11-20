@@ -271,3 +271,14 @@ dialog.modal { border: 1px solid var(--border); border-radius: var(--radius-l); 
   .panel { border-color: #999; break-inside: avoid; }
   a { text-decoration: none !important; }
 }
+
+/* Shared UI primitives: dialog close button, inputs, theme toggle */
+.ui-modal-x { position: absolute; top: 12px; right: 12px; z-index: 2; display: inline-grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.ui-modal-x:hover { background: var(--color-background-muted, rgba(127,127,127,.14)); color: var(--color-text-primary); }
+.ui-modal-x:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+dialog[open] { position: fixed; }
+.ui-input { width: 100%; min-height: 36px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background-surface); color: var(--color-text-primary); font: inherit; padding: 6px 10px; box-sizing: border-box; }
+.ui-input:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; border-color: transparent; }
+.ui-theme-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; min-width: 32px; justify-content: center; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+.ui-theme-btn:hover { background: rgba(127,127,127,.16); }
+.ui-theme-btn:focus-visible { outline: 2px solid var(--color-accent); }

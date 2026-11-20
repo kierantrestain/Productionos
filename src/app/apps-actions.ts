@@ -7,9 +7,13 @@ import type { AppConfig, Component, Page } from "@/lib/apps/types";
 import * as A from "@/server/apps/apps";
 import { componentData } from "@/server/apps/data";
 import { runButton, submitAppForm, updateFromApp } from "@/server/apps/runtime-actions";
+import { createInterfaceApp, type Layout } from "@/server/apps/presets";
 
 const done = () => revalidatePath("/", "layout");
 
+export async function createInterfaceAppAction(input: { baseId: string; name: string; layout: Layout; tableId?: string }) {
+  return toResult(async () => { const a = await createInterfaceApp(await requireContext(), input); done(); return { id: a.id, slug: a.slug }; });
+}
 export async function createAppAction(input: { baseId: string; name: string; audience?: "workspace" | "portal" }) {
   return toResult(async () => { const a = await A.createApp(await requireContext(), input); done(); return { id: a.id, slug: a.slug }; });
 }

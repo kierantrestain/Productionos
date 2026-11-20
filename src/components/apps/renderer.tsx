@@ -1,15 +1,16 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
-import { Layers, Gauge, TrendingUp, CircleCheck, CalendarClock, Users, PoundSterling, Activity, ChevronRight, FileText, Clock } from "lucide-react";
+import { Layers, Gauge, TrendingUp, CircleCheck, CalendarClock, Users, PoundSterling, Activity, ChevronRight, ChevronLeft, FileText, Clock, Search, ArrowUp, ArrowDown, ImageIcon } from "lucide-react";
 import type { Component, Page } from "@/lib/apps/types";
 import type { ComponentData, FieldLite } from "@/server/apps/data";
 import { CellView } from "@/components/platform/cells";
 import { cellText } from "@/lib/platform/cell-text";
 import { appButtonAction, appCommentAction, appFormAction, appUpdateAction } from "@/app/apps-actions";
 import { BarChart, DonutChart, LineChart } from "./charts";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 export type RuntimeInfo = { slug: string; pageId: string; preview: boolean; recordId?: string; role: string; pages: { id: string; slug: string; kind: string; tableId?: string }[]; design?: boolean };
 export const KPI_ICONS: Record<string, React.ComponentType<{ size?: number }>> = { layers: Layers, gauge: Gauge, trend: TrendingUp, check: CircleCheck, calendar: CalendarClock, users: Users, money: PoundSterling, activity: Activity, file: FileText, clock: Clock };
@@ -84,6 +85,20 @@ export function AppComponent({ comp, data, rc }: { comp: Component; data?: Compo
     case "record": return <RecordComp comp={comp} data={data} rc={rc} />;
     case "form": return <FormComp comp={comp} data={data} rc={rc} />;
     case "button": return <ButtonComp comp={comp} rc={rc} />;
+    case "calendar": return <CalendarComp comp={comp} data={data} rc={rc} />;
+    case "gallery": return <GalleryComp comp={comp} data={data} rc={rc} />;
+    case "progress": {
+      const { fmt } = formatter(p.format);
+      const v = data?.kind === "kpi" ? data.value : 0; const t = p.target || 1; const pct = Math.max(0, Math.min(100, Math.round((v / t) * 100)));
+      return (
+        <Card title={p.title} subtitle={p.subtitle}>
+          {data?.kind === "kpi" ? <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}><span className="ap-kpi-v">{fmt(v)}</span><span className="ap-muted">of {fmt(t)}</span><span style={{ flex: 1 }} /><span className="ap-strong">{pct}%</span></div>
+            <div className="ap-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={`${p.title}: ${pct}% of goal`}><span style={{ width: `${pct}%` }} /></div>
+          </> : <State d={data} />}
+        </Card>
+      );
+    }
   }
 }
 
@@ -96,15 +111,25 @@ function pickFields(fields: FieldLite[], ids?: string[], n = 6) {
 function TableComp({ comp, data, rc }: { comp: Component; data?: ComponentData; rc: RuntimeInfo }) {
   const router = useRouter();
   const p = comp.props;
+  const [q, setQ] = useState(""); const [sort, setSort] = useState<{ id: string; dir: 1 | -1 } | null>(null);
+  const rows = useMemo(() => {
+    if (data?.kind !== "rows") return [];
+    const fs = pickFields(data.fields, p.fieldIds);
+    let out = data.rows;
+    if (q.trim()) { const n = q.trim().toLowerCase(); out = out.filter((r) => fs.some((f) => cellText(f as never, r.values[f.id]).toLowerCase().includes(n))); }
+    if (sort) { const f = fs.find((x) => x.id === sort.id); if (f) { const coll = new Intl.Collator("en-GB", { numeric: true }); out = [...out].sort((a, b) => { const x = a.values[f.id], y = b.values[f.id]; const d = typeof x === "number" && typeof y === "number" ? x - y : coll.compare(cellText(f as never, x), cellText(f as never, y)); return d * sort.dir; }); } }
+    return out;
+  }, [data, q, sort, p.fieldIds]);
   if (data?.kind !== "rows") return <Card title={p.title}><State d={data} /></Card>;
   const cols = pickFields(data.fields, p.fieldIds);
+  const search = p.showSearch !== false;
   return (
-    <Card title={p.title} subtitle={p.subtitle} action={<span className="ap-muted" style={{ fontSize: 12 }}>{data.total} {data.total === 1 ? "record" : "records"}</span>}>
+    <Card title={p.title} subtitle={p.subtitle} action={<div style={{ display: "flex", alignItems: "center", gap: 8 }}>{search && <label className="ap-search"><Search size={14} aria-hidden /><input type="search" placeholder="Search" aria-label={`Search ${p.title ?? "records"}`} value={q} onChange={(e) => setQ(e.target.value)} /></label>}<span className="ap-muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>{q ? `${rows.length} of ${data.total}` : data.total} {data.total === 1 ? "record" : "records"}</span></div>}>
       <div className="ap-table-wrap">
         <table className="ap-table">
-          <thead><tr>{cols.map((f) => <th key={f.id} scope="col">{f.name}</th>)}</tr></thead>
+          <thead><tr>{cols.map((f) => <th key={f.id} scope="col" aria-sort={sort?.id === f.id ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>{search ? <button type="button" className="ap-th-btn" onClick={() => setSort((s) => (s?.id === f.id ? (s.dir === 1 ? { id: f.id, dir: -1 } : null) : { id: f.id, dir: 1 }))}>{f.name}{sort?.id === f.id && (sort.dir === 1 ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}</button> : f.name}</th>)}</tr></thead>
           <tbody>
-            {data.rows.map((r) => {
+            {rows.map((r) => {
               const href = p.detailPageId ? detailHref(rc, p.detailPageId, r.id) : null;
               return (
                 <tr key={r.id} className={href ? "ap-click" : undefined} onClick={() => href && !rc.design && router.push(href)} tabIndex={href ? 0 : undefined} onKeyDown={(e) => { if (e.key === "Enter" && href && !rc.design) router.push(href); }}>
@@ -114,7 +139,66 @@ function TableComp({ comp, data, rc }: { comp: Component; data?: ComponentData; 
             })}
           </tbody>
         </table>
-        {!data.rows.length && <div className="ap-muted" style={{ padding: 16 }}>No records.</div>}
+        {!rows.length && <div className="ap-muted" style={{ padding: 16 }}>{q ? "No matches." : "No records."}</div>}
+      </div>
+    </Card>
+  );
+}
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function CalendarComp({ comp, data, rc }: { comp: Component; data?: ComponentData; rc: RuntimeInfo }) {
+  const p = comp.props;
+  const [cur, setCur] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  if (data?.kind !== "rows") return <Card title={p.title}><State d={data} /></Card>;
+  const df = data.fields.find((f) => f.id === p.dateFieldId);
+  if (!df) return <Card title={p.title}><div className="ap-muted">Choose a date field in the inspector.</div></Card>;
+  const primary = data.fields.find((f) => f.isPrimary) ?? data.fields[0];
+  const byDay = new Map<string, typeof data.rows>();
+  for (const r of data.rows) { const v = r.values[df.id]; if (!v) continue; const d = new Date(String(v)); if (isNaN(+d)) continue; const k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; byDay.set(k, [...(byDay.get(k) ?? []), r]); }
+  const start = new Date(cur); start.setDate(1 - ((cur.getDay() + 6) % 7));
+  const days = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+  const today = new Date().toDateString();
+  return (
+    <Card title={p.title} subtitle={p.subtitle} action={<div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <button type="button" className="ap-icon-btn" aria-label="Previous month" onClick={() => setCur(new Date(cur.getFullYear(), cur.getMonth() - 1, 1))}><ChevronLeft size={16} /></button>
+      <span className="ap-strong" style={{ minWidth: 130, textAlign: "center" }}>{MONTHS[cur.getMonth()]} {cur.getFullYear()}</span>
+      <button type="button" className="ap-icon-btn" aria-label="Next month" onClick={() => setCur(new Date(cur.getFullYear(), cur.getMonth() + 1, 1))}><ChevronRight size={16} /></button>
+      <button type="button" className="ap-outline-btn" style={{ height: 28, padding: "0 10px" }} onClick={() => { const d = new Date(); setCur(new Date(d.getFullYear(), d.getMonth(), 1)); }}>Today</button>
+    </div>}>
+      <div className="ap-cal" role="grid" aria-label={`${p.title ?? "Calendar"}, ${MONTHS[cur.getMonth()]} ${cur.getFullYear()}`}>
+        {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => <div key={d} className="ap-cal-h" role="columnheader">{d}</div>)}
+        {days.map((d) => { const items = byDay.get(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`) ?? []; return (
+          <div key={d.toISOString()} role="gridcell" className={`ap-cal-d ${d.getMonth() !== cur.getMonth() ? "out" : ""} ${d.toDateString() === today ? "today" : ""}`}>
+            <span className="ap-cal-n">{d.getDate()}</span>
+            {items.slice(0, 3).map((r) => { const href = p.detailPageId ? detailHref(rc, p.detailPageId, r.id) : null; const t = cellText(primary as never, r.values[primary.id]) || "Unnamed"; return href && !rc.design ? <Link key={r.id} href={href} className="ap-cal-ev" title={t}>{t}</Link> : <span key={r.id} className="ap-cal-ev" title={t}>{t}</span>; })}
+            {items.length > 3 && <span className="ap-muted" style={{ fontSize: 11 }}>+{items.length - 3} more</span>}
+          </div>); })}
+      </div>
+    </Card>
+  );
+}
+
+function GalleryComp({ comp, data, rc }: { comp: Component; data?: ComponentData; rc: RuntimeInfo }) {
+  const p = comp.props;
+  if (data?.kind !== "rows") return <Card title={p.title}><State d={data} /></Card>;
+  const primary = data.fields.find((f) => f.isPrimary) ?? data.fields[0];
+  const extra = pickFields(data.fields, p.fieldIds, 4).filter((f) => f.id !== primary?.id && f.id !== p.imageFieldId).slice(0, 4);
+  return (
+    <Card title={p.title} subtitle={p.subtitle} action={<span className="ap-muted" style={{ fontSize: 12 }}>{data.total} {data.total === 1 ? "record" : "records"}</span>}>
+      <div className="ap-gallery">
+        {data.rows.map((r) => {
+          const img = p.imageFieldId ? ((r.values[p.imageFieldId] as { id: string; type?: string }[] | null) ?? []).find((a) => !a.type || a.type.startsWith("image/")) : undefined;
+          const href = p.detailPageId ? detailHref(rc, p.detailPageId, r.id) : null;
+          const body = <>
+            {p.imageFieldId && <div className="ap-gal-img">{img ? <img src={`/api/platform/attachments/${img.id}`} alt="" loading="lazy" /> : <ImageIcon size={22} aria-hidden />}</div>}
+            <div style={{ padding: 12, display: "grid", gap: 4 }}>
+              <div className="ap-strong">{cellText(primary as never, r.values[primary.id]) || "Unnamed"}</div>
+              {extra.map((f) => <div key={f.id} style={{ fontSize: 12 }}><span className="ap-muted">{f.name}: </span><CellView f={asField(f)} v={r.values[f.id]} /></div>)}
+            </div>
+          </>;
+          return href && !rc.design ? <Link key={r.id} href={href} className="ap-gal-card ap-click">{body}</Link> : <div key={r.id} className="ap-gal-card">{body}</div>;
+        })}
+        {!data.rows.length && <div className="ap-muted">No records.</div>}
       </div>
     </Card>
   );
@@ -297,7 +381,7 @@ function ButtonComp({ comp, rc }: { comp: Component; rc: RuntimeInfo }) {
     <div className="ap-button">
       <Button label={p.label || "Button"} variant={p.variant === "danger" ? "destructive" : p.variant === "secondary" ? "secondary" : "primary"} isDisabled={rc.design}
         clickAction={async () => {
-          if (p.action?.confirm && !confirm(p.action.confirm)) return;
+          if (p.action?.confirm && !(await confirmDialog(p.action.confirm))) return;
           setMsg("");
           const r = await appButtonAction(rc.slug, rc.pageId, comp.id, rc.recordId, rc.preview);
           if (!r.ok) { setMsg(r.error); return; }

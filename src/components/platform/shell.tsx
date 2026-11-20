@@ -5,6 +5,7 @@ import { SideNav, SideNavHeading, SideNavItem, SideNavSection } from "@astryxdes
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Clapperboard, Home, LayoutTemplate, LogOut, Settings, ShieldCheck, Users } from "lucide-react";
 import { logoutAction, switchOrgAction } from "@/app/actions";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function PlatformShell({ user, org, orgs, children }: { user: { name: string; email: string; role: string }; org: { id: string; name: string; isDemo: boolean }; orgs: { id: string; name: string; isDemo: boolean }[]; children: React.ReactNode }) {
   const path = usePathname();
@@ -19,6 +20,7 @@ export function PlatformShell({ user, org, orgs, children }: { user: { name: str
             footer={<div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 4px" }}>
               <Avatar name={user.name} size="sm" />
               <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div><div style={{ fontSize: 11, color: "var(--color-text-secondary)", textTransform: "capitalize" }}>{user.role}</div></div>
+              <ThemeToggle />
               <form action={logoutAction}><button className="p-tbtn" aria-label="Sign out" title="Sign out"><LogOut size={15} /></button></form>
             </div>}>
             <SideNavSection title="Workspace" isHeaderHidden>

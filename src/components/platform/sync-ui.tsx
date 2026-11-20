@@ -1,13 +1,15 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { RefreshCw, Plus, Trash2, Database, Link2 } from "lucide-react";
 import { createSyncAction, deleteSyncAction, runSyncAction } from "@/app/platform-actions";
 import type { BaseMeta } from "@/app/(base)/base/[baseId]/load";
 import { BaseHeader } from "./base-header";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type S = { id: string; kind: string; name: string; tableId: string | null; status: string; lastSyncedAt: string | null; lastError: string | null; lastStats: Record<string, unknown> | null; intervalMinutes: number | null; source: string };
 const inp: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 8px" };
@@ -39,12 +41,12 @@ export function SyncApp({ meta, syncs, secrets }: { meta: BaseMeta; syncs: S[]; 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="t">{s.name} <span className={`chip ${s.status === "ok" ? "green" : s.status === "error" ? "red" : "gray"}`}>{s.status}</span></div>
                   <div className="s" style={{ overflowWrap: "anywhere" }}>{s.source}</div>
-                  <div className="s">{s.tableId ? <a href={`/base/${meta.base.id}/${s.tableId}`}>Open {meta.tables.find((t) => t.id === s.tableId)?.name ?? "table"}</a> : "Table is created on the first run"}{s.intervalMinutes ? ` · every ${s.intervalMinutes >= 1440 ? `${s.intervalMinutes / 1440} day(s)` : `${s.intervalMinutes / 60} hour(s)`}` : " · manual"}{s.lastSyncedAt ? ` · last ${new Date(s.lastSyncedAt).toLocaleString("en-GB")}` : ""}</div>
+                  <div className="s">{s.tableId ? <Link href={`/base/${meta.base.id}/${s.tableId}`}>Open {meta.tables.find((t) => t.id === s.tableId)?.name ?? "table"}</Link> : "Table is created on the first run"}{s.intervalMinutes ? ` · every ${s.intervalMinutes >= 1440 ? `${s.intervalMinutes / 1440} day(s)` : `${s.intervalMinutes / 60} hour(s)`}` : " · manual"}{s.lastSyncedAt ? ` · last ${new Date(s.lastSyncedAt).toLocaleString("en-GB")}` : ""}</div>
                   {s.lastStats && <div className="s">{Object.entries(s.lastStats).map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${v}`).join(" · ")}</div>}
                   {s.lastError && <div className="s" style={{ color: "var(--color-text-error)" }}>{s.lastError}</div>}
                 </div>
                 {meta.canEdit && <button type="button" className="p-tbtn" disabled={busy === s.id} onClick={async () => { setBusy(s.id); setMsg(""); const r = await runSyncAction(s.id); setBusy(null); setMsg(r.ok ? `Synced: ${r.data.stats.created} new, ${r.data.stats.updated} updated, ${r.data.stats.unchanged} unchanged.` : r.error); router.refresh(); }}><RefreshCw size={14} />{busy === s.id ? "Syncing…" : "Sync now"}</button>}
-                {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Remove sync" onClick={async () => { if (confirm("Remove this sync? The table and its records stay.")) { await deleteSyncAction(s.id); router.refresh(); } }}><Trash2 size={14} /></button>}
+                {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Remove sync" onClick={async () => { if ((await confirmDialog("Remove this sync? The table and its records stay.", { danger: true, confirmLabel: "Remove" }))) { await deleteSyncAction(s.id); router.refresh(); } }}><Trash2 size={14} /></button>}
               </article>
             ))}
           </div>

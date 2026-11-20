@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -9,6 +10,8 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: [{ media: "(prefers-color-scheme: dark)", color: "#141412" }, { color: "#f6f5f3" }] };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="en-GB"><body><Providers>{children}</Providers></body></html>;
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const c = (await cookies()).get("theme")?.value;
+  const mode = c === "light" || c === "dark" ? c : "system";
+  return <html lang="en-GB" data-theme={mode === "system" ? undefined : mode}><body><Providers initialMode={mode}>{children}</Providers></body></html>;
 }

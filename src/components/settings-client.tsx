@@ -5,6 +5,7 @@ import { archiveFieldDefAction, createFieldDefAction, updateFieldDefAction, upda
 import { CUSTOM_FIELD_TYPES, DEFAULT_APPROVAL, DEFAULT_CONTACT_POLICY, type CustomFieldDefShape, type OrgSettingsShape, optionLabel } from "@/lib/customise";
 import { useRun } from "./client";
 import { Icon } from "./icons";
+import { confirmDialog, promptDialog } from "@/components/ui/dialogs";
 
 type EntityMeta = { key: string; label: string; plural: string };
 type Ext = { key: string; entity: string; entityLabel: string; field: string; label: string; builtIn: string[] };
@@ -127,8 +128,8 @@ export function CustomFieldSettings({ defs, entities }: { defs: CustomFieldDefSh
             <strong style={{ flex: 1 }}>{d.label}<span className="subtle mono" style={{ fontSize: 11, marginLeft: 8 }}>{d.type}{d.type === "select" ? `: ${d.options.join(", ")}` : ""}</span></strong>
             {d.required && <span className="badge tone-warn plain">required</span>}
             <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={d.showInList} onChange={(e) => run(updateFieldDefAction(d.id, { showInList: e.target.checked })).then((r) => r !== undefined && router.refresh())} /> column</label>
-            {d.type === "select" && <button className="btn btn-sm" onClick={() => { const o = prompt("Choices (comma separated)", d.options.join(", ")); if (o !== null) run(updateFieldDefAction(d.id, { options: o.split(",").map((x) => x.trim()).filter(Boolean) }), "Choices updated").then((r) => r !== undefined && router.refresh()); }}>Edit choices</button>}
-            <button className="btn btn-quiet btn-sm btn-danger" onClick={() => confirm(`Remove “${d.label}”? Existing values are kept in history but hidden.`) && run(archiveFieldDefAction(d.id), "Field removed").then((r) => r !== undefined && router.refresh())}>Remove</button>
+            {d.type === "select" && <button className="btn btn-sm" onClick={async () => { const o = (await promptDialog("Choices (comma separated)", d.options.join(", "))); if (o !== null) run(updateFieldDefAction(d.id, { options: o.split(",").map((x) => x.trim()).filter(Boolean) }), "Choices updated").then((r) => r !== undefined && router.refresh()); }}>Edit choices</button>}
+            <button className="btn btn-quiet btn-sm btn-danger" onClick={async () => (await confirmDialog(`Remove “${d.label}”? Existing values are kept in history but hidden.`, { danger: true, confirmLabel: "Remove" })) && run(archiveFieldDefAction(d.id), "Field removed").then((r) => r !== undefined && router.refresh())}>Remove</button>
           </li>
         ))}
         {!defs.length && <li className="subtle">No custom fields yet.</li>}

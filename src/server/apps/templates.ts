@@ -19,7 +19,7 @@ import { createApp, publishApp } from "./apps";
 type NCond = { field: string; op: string; value?: unknown };
 type NData = { table: string; view?: string; filter?: NCond[]; rel?: string; scope?: string; sort?: string; dir?: "asc" | "desc" };
 type NComp = { type: Component["type"]; w: number; visibleTo?: Role[]; props?: Omit<Component["props"], "data" | "fieldId" | "groupFieldId" | "fieldIds" | "detailPageId" | "titleFieldId" | "subtitleFieldId" | "action" | "required"> & {
-  data?: NData; field?: string; group?: string; fields?: string[]; detail?: string; title_field?: string; subtitle_field?: string; required?: string[];
+  data?: NData; field?: string; group?: string; fields?: string[]; detail?: string; title_field?: string; subtitle_field?: string; date_field?: string; image_field?: string; required?: string[];
   action?: { kind: "navigate" | "create_record" | "update_record" | "run_automation" | "open_url"; page?: string; table?: string; values?: Record<string, unknown>; automation?: string; url?: string; confirm?: string };
 } };
 export type NPage = { key: string; title: string; heading?: string; subtitle?: string; icon?: string; kind?: Page["kind"]; table?: string; scope?: string; hidden?: boolean; parent?: string; visibleTo?: Role[]; components: NComp[] };
@@ -49,7 +49,7 @@ export async function resolveAppSpec(baseId: string, spec: AppSpec, automationId
     components: p.components.map((c): Component => {
       const pr = c.props ?? {};
       const tbl = pr.data?.table ?? (c.type === "record" ? p.table : undefined);
-      const { data, field, group, fields: fl, detail, title_field, subtitle_field, action, required, ...rest } = pr;
+      const { data, field, group, fields: fl, detail, title_field, subtitle_field, date_field, image_field, action, required, ...rest } = pr;
       return {
         id: newId(), type: c.type, w: c.w, visibleTo: c.visibleTo,
         props: {
@@ -62,6 +62,8 @@ export async function resolveAppSpec(baseId: string, spec: AppSpec, automationId
           detailPageId: detail ? pageIds[detail] : undefined,
           titleFieldId: title_field && tbl ? F(tbl, title_field).id : undefined,
           subtitleFieldId: subtitle_field && tbl ? F(tbl, subtitle_field).id : undefined,
+          dateFieldId: date_field && tbl ? F(tbl, date_field).id : undefined,
+          imageFieldId: image_field && tbl ? F(tbl, image_field).id : undefined,
           action: action ? {
             kind: action.kind, pageId: action.page ? pageIds[action.page] : undefined, url: action.url, confirm: action.confirm,
             tableId: action.table ? T(action.table).id : undefined, automationId: action.automation ? automationIds[action.automation] : undefined,

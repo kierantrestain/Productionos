@@ -2,16 +2,18 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
-import { Dialog } from "@astryxdesign/core/Dialog";
-import { Monitor, Tablet, Smartphone, Play, Upload, History, Grid2x2, Trash2, Copy, ArrowLeft, ArrowRight, Plus, Gauge, BarChart3, Table2, Kanban, Activity, Heading, Text, Minus, FormInput, MousePointerClick, FileText, Search, ChevronUp, ChevronDown, Settings } from "lucide-react";
+import { Dialog } from "@/components/ui/modal";
+import { Monitor, Tablet, Smartphone, Play, Upload, History, Grid2x2, Trash2, Copy, ArrowLeft, ArrowRight, Plus, Gauge, BarChart3, Table2, Kanban, Activity, Heading, Text, Minus, FormInput, MousePointerClick, FileText, Search, CalendarDays, LayoutGrid, Target, ChevronUp, ChevronDown, Settings } from "lucide-react";
 import { defaultProps, newId, PALETTE, slugify, type AppConfig, type Component, type ComponentType, type Page } from "@/lib/apps/types";
 import type { ComponentData } from "@/server/apps/data";
 import { listVersionsAction, previewDataAction, publishAppAction, rollbackAppAction, sampleRecordsAction, saveDraftAction, updateAppMetaAction } from "@/app/apps-actions";
 import { PageGrid } from "@/components/apps/renderer";
 import { PAGE_ICONS } from "@/components/apps/shell";
 import { ComponentInspector, PageInspector, type Meta } from "./inspector";
+import { confirmDialog } from "@/components/ui/dialogs";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
-const TILE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = { gauge: Gauge, chart: BarChart3, table: Table2, kanban: Kanban, activity: Activity, heading: Heading, text: Text, divider: Minus, form: FormInput, button: MousePointerClick, record: FileText };
+const TILE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = { gauge: Gauge, chart: BarChart3, table: Table2, kanban: Kanban, activity: Activity, heading: Heading, text: Text, divider: Minus, form: FormInput, button: MousePointerClick, record: FileText, calendar: CalendarDays, gallery: LayoutGrid, progress: Target };
 type AppInfo = { id: string; name: string; slug: string; audience: string; baseId: string; published: boolean; revision: number };
 
 export function Builder({ app, initial, meta }: { app: AppInfo; initial: AppConfig; meta: Meta }) {
@@ -73,7 +75,17 @@ export function Builder({ app, initial, meta }: { app: AppInfo; initial: AppConf
 
   const insert = (type: ComponentType, beforeId?: string) => {
     const item = PALETTE.flatMap((g) => g.items).find((i) => i.type === type)!;
-    const comp: Component = { id: newId(), type, w: item.w, props: defaultProps(type, page?.kind === "detail" && type !== "record" ? undefined : defaultTable) };
+    const used = page?.components.map((c) => c.props.data?.tableId).filter(Boolean) as string[] | undefined;
+    const pageTable = used?.length ? used.sort((a, b) => used.filter((x) => x === b).length - used.filter((x) => x === a).length)[0] : defaultTable;
+    const props = defaultProps(type, page?.kind === "detail" && type !== "record" ? undefined : pageTable);
+    // Smart defaults: pre-pick the obvious field so a dropped component shows real data straight away.
+    const tf = meta.fields.filter((f) => f.tableId === props.data?.tableId);
+    const first = (types: string[]) => tf.find((f) => types.includes(f.type))?.id;
+    if (type === "calendar") props.dateFieldId = first(["date", "dateTime"]) ?? first(["createdTime"]);
+    if (type === "gallery") props.imageFieldId = first(["attachment"]);
+    if (type === "kanban" || type === "chart") props.groupFieldId = first(["singleSelect"]) ?? (type === "chart" ? first(["date", "dateTime", "checkbox", "multipleSelects"]) : undefined);
+    if (["table", "kanban", "activity", "calendar", "gallery"].includes(type)) { const d = page && config.pages.find((x) => x.kind === "detail" && x.tableId === props.data?.tableId); if (d) props.detailPageId = d.id; }
+    const comp: Component = { id: newId(), type, w: item.w, props };
     updatePage((p) => { const list = [...p.components]; const i = beforeId ? list.findIndex((c) => c.id === beforeId) : -1; list.splice(i < 0 ? list.length : i, 0, comp); return { ...p, components: list }; });
     setSel(comp.id); setRight(["heading", "text", "divider", "button"].includes(type) ? "props" : "data");
   };
@@ -125,6 +137,7 @@ export function Builder({ app, initial, meta }: { app: AppInfo; initial: AppConf
           {save === "saved" ? "Draft saved" : save === "saving" ? "Saving…" : save === "dirty" ? "Unsaved changes" : saveErr}
         </span>
         {save === "conflict" && <button type="button" className="ap-outline-btn" onClick={() => window.location.reload()}>Reload</button>}
+        <ThemeToggle />
       </header>
       <div className="bd-sub">
         <div>
@@ -224,7 +237,7 @@ export function Builder({ app, initial, meta }: { app: AppInfo; initial: AppConf
             <ComponentInspector comp={selected} page={page} config={config} meta={meta} onChange={updateComp} tab={right} />
           </> : page ? <>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}><Settings size={15} /><strong>Page settings</strong></div>
-            <PageInspector page={page} config={config} meta={meta} onChange={(p) => updatePage(() => p)} onDelete={() => { if (!confirm(`Delete page “${page.title}”?`)) return; setConfig((c) => ({ ...c, pages: c.pages.filter((x) => x.id !== page.id), homePageId: c.homePageId === page.id ? undefined : c.homePageId })); setPageId(config.pages.find((x) => x.id !== page.id)?.id); }} />
+            <PageInspector page={page} config={config} meta={meta} onChange={(p) => updatePage(() => p)} onDelete={async () => { if (!(await confirmDialog(`Delete page “${page.title}”?`, { danger: true, confirmLabel: "Delete" }))) return; setConfig((c) => ({ ...c, pages: c.pages.filter((x) => x.id !== page.id), homePageId: c.homePageId === page.id ? undefined : c.homePageId })); setPageId(config.pages.find((x) => x.id !== page.id)?.id); }} />
           </> : null}
         </aside>
       </div>
@@ -280,7 +293,7 @@ function VersionsDialog({ appId, onClose }: { appId: string; onClose: () => void
             <li key={v.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--color-border)" }}>
               <strong>v{v.version}</strong>{i === 0 && <span className="ap-badge">Live</span>}
               <span style={{ flex: 1, fontSize: 13 }}>{v.note ?? ""} <span className="ap-muted">{new Date(v.publishedAt).toLocaleString("en-GB")}</span></span>
-              {i > 0 && <Button label="Roll back" size="sm" clickAction={async () => { if (!confirm(`Republish v${v.version} as the live version? The draft is reset to it too.`)) return; const r = await rollbackAppAction(appId, v.id); if (!r.ok) setErr(r.error); else window.location.reload(); }} />}
+              {i > 0 && <Button label="Roll back" size="sm" clickAction={async () => { if (!(await confirmDialog(`Republish v${v.version} as the live version? The draft is reset to it too.`))) return; const r = await rollbackAppAction(appId, v.id); if (!r.ok) setErr(r.error); else window.location.reload(); }} />}
             </li>
           ))}
         </ul>

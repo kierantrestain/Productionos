@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { LayoutDashboard, PencilRuler, Globe } from "lucide-react";
 import { createAppAction, createAppFromTemplateAction } from "@/app/apps-actions";
 import { BaseIcon } from "@/components/platform/icons";

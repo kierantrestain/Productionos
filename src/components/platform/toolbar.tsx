@@ -29,7 +29,11 @@ export function ValueInput({ f, op, value, onChange }: { f: ClientField; op: str
     }
     return <select aria-label="Value" style={{ ...sel, flex: 1 }} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}><option value="">Select…</option>{f.options.choices?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>;
   }
-  if (DATE_T.includes(f.type) && !op.startsWith("isWithin")) return <input type="date" aria-label="Date" style={{ ...sel, flex: 1 }} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />;
+  if (DATE_T.includes(f.type) && !op.startsWith("isWithin")) return (
+    <span style={{ display: "flex", gap: 4, flex: 1 }}>
+      {value === "today" ? <span style={{ ...sel, flex: 1, display: "inline-flex", alignItems: "center" }}>today (relative)</span> : <input type="date" aria-label="Date" style={{ ...sel, flex: 1 }} value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />}
+      <button type="button" className="p-tbtn" aria-pressed={value === "today"} onClick={() => onChange(value === "today" ? "" : "today")}>{value === "today" ? "Pick date" : "Today"}</button>
+    </span>);
   return <input aria-label="Value" style={{ ...sel, flex: 1 }} value={String(value ?? "")} placeholder={op.startsWith("isWithin") ? "days" : "Enter a value"} onChange={(e) => onChange(e.target.value)} />;
 }
 

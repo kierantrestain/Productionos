@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { Home } from "lucide-react";
 import { BaseIcon } from "./icons";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export const HEAD_BG: Record<string, string> = { blue: "#1f6feb", cyan: "#0891b2", teal: "#0d9488", green: "#15803d", yellow: "#b45309", orange: "#c2410c", red: "#be123c", pink: "#be185d", purple: "#7c3aed", gray: "#475569" };
 export type BaseTab = "data" | "interfaces" | "automations" | "agents" | "sync" | "access";
@@ -18,6 +19,7 @@ export function BaseHeader({ base, role, active, nameSlot }: { base: { id: strin
         {tabs.map(([k, label, href]) => <Link key={k} href={href} className="p-headtab" aria-current={k === active ? "page" : undefined}>{label}</Link>)}
       </nav>
       <span style={{ flex: 1 }} />
+      <ThemeToggle className="ui-theme-btn p-ghost" />
       <span className="chip" style={{ background: "rgba(0,0,0,.32)", color: "#fff" }} title="Your access to this base">{role}{role === "commenter" || role === "reader" ? " · free seat" : ""}</span>
     </header>
   );

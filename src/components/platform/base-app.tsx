@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { ChevronDown, Plus, Search, User, Users, Upload, Table2, Lock } from "lucide-react";
 import type { ViewConfig } from "@/db/schema";
@@ -22,6 +22,7 @@ import { ImportDialog } from "./import-dialog";
 import { CalendarView, FormView, GalleryView, KanbanView, ListView, TimelineView } from "./views";
 import { toServerValue } from "./cells";
 import type { BaseData, ClientField, ClientRow } from "./types";
+import { promptDialog } from "@/components/ui/dialogs";
 
 
 export function BaseApp({ data }: { data: BaseData }) {
@@ -143,7 +144,7 @@ export function BaseApp({ data }: { data: BaseData }) {
     go(data.table.id, r.data.id); router.refresh();
   };
   const viewMenu = (v: (typeof data.views)[number]) => [
-    ...(v.canEdit || (v.personal) ? [{ label: "Rename view", onClick: async () => { const n = prompt("View name", v.name); if (n?.trim()) { const r = await updateViewAction(v.id, { name: n.trim() }); if (!r.ok) notify(r.error); else router.refresh(); } } }] : []),
+    ...(v.canEdit || (v.personal) ? [{ label: "Rename view", onClick: async () => { const n = (await promptDialog("View name", v.name)); if (n?.trim()) { const r = await updateViewAction(v.id, { name: n.trim() }); if (!r.ok) notify(r.error); else router.refresh(); } } }] : []),
     { label: "Duplicate as personal view", onClick: async () => { const r = await createViewAction(data.table.id, { name: `${v.name} (mine)`, type: v.type, personal: true, copyFromViewId: v.id }); if (!r.ok) notify(r.error); else { go(data.table.id, r.data.id); router.refresh(); } } },
     ...(data.can.collabViews ? [{ label: "Duplicate as collaborative view", onClick: async () => { const r = await createViewAction(data.table.id, { name: `${v.name} copy`, type: v.type, copyFromViewId: v.id }); if (!r.ok) notify(r.error); else { go(data.table.id, r.data.id); router.refresh(); } } }] : []),
     ...((v.personal || data.can.collabViews) && data.views.length > 1 ? [{ type: "divider" as const }, { label: "Delete view", variant: "destructive" as const, onClick: () => setConfirm({ title: `Delete view “${v.name}”?`, body: "Records are not affected — only this view's filters, sorts and layout.", run: async () => { const r = await archiveViewAction(v.id); if (!r.ok) notify(r.error); else { go(data.table.id); router.refresh(); } } }) }] : []),
@@ -163,7 +164,7 @@ export function BaseApp({ data }: { data: BaseData }) {
       <nav className="p-tables" aria-label="Tables" style={{ background: HEAD_BG[data.base.color] ?? HEAD_BG.blue }}>
         {data.tables.map((t) => t.id === data.table.id && data.can.schema ? (
           <DropdownMenu key={t.id} menuWidth={200} items={[
-            { label: "Rename table", onClick: async () => { const n = prompt("Table name", t.name); if (n?.trim()) { const r = await updateTableAction(t.id, { name: n.trim() }); if (!r.ok) notify(r.error); else router.refresh(); } } },
+            { label: "Rename table", onClick: async () => { const n = (await promptDialog("Table name", t.name)); if (n?.trim()) { const r = await updateTableAction(t.id, { name: n.trim() }); if (!r.ok) notify(r.error); else router.refresh(); } } },
             { label: "Edit table permissions", onClick: () => setConfirm({ title: "Table permissions", body: "perm", run: async () => {} }) },
             ...(data.tables.length > 1 ? [{ type: "divider" as const }, { label: "Delete table", variant: "destructive" as const, onClick: () => setConfirm({ title: `Delete table “${t.name}”?`, body: "All its records, views and fields are archived, and link fields pointing to it from other tables are removed.", run: async () => { const r = await archiveTableAction(t.id); if (!r.ok) notify(r.error); else { router.push(`/base/${data.base.id}`); router.refresh(); } } }) }] : []),
           ]} renderTrigger={(tp) => <button type="button" {...tp} aria-current="page" className="p-tabletab">{t.name}<ChevronDown size={13} /></button>} />

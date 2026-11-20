@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { importSpreadsheetAction } from "@/app/platform-actions";
 
 /** Import CSV / Excel as a new base, or as a new table when baseId is given. */

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
 import { KeyRound, Trash2, Copy } from "lucide-react";
 import { createPlatformTokenAction, revokePlatformTokenAction } from "@/app/platform-actions";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Token = { id: string; name: string; scopes: string[]; createdAt: string; lastUsedAt: string | null; mine: boolean };
 const SCOPE_HELP: Record<string, string> = { "bases:read": "List bases", "schema:read": "Read tables, fields and views", "records:read": "Read records", "records:write": "Create, update and delete records" };
@@ -60,7 +61,7 @@ export function ApiTokensView({ tokens, scopes }: { tokens: Token[]; scopes: str
               <td><span style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{t.scopes.map((s) => <span key={s} className="chip">{s}</span>)}</span></td>
               <td style={{ fontSize: 13 }}>{new Date(t.createdAt).toLocaleDateString("en-GB")}</td>
               <td style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleString("en-GB") : "Never"}</td>
-              <td style={{ paddingRight: 14 }}><button type="button" className="p-tbtn" style={{ color: "var(--color-text-red)" }} onClick={async () => { if (!confirm(`Revoke “${t.name}”? Apps using it stop working immediately.`)) return; const r = await revokePlatformTokenAction(t.id); if (!r.ok) setErr(r.error); router.refresh(); }}><Trash2 size={14} />Revoke</button></td>
+              <td style={{ paddingRight: 14 }}><button type="button" className="p-tbtn" style={{ color: "var(--color-text-red)" }} onClick={async () => { if (!(await confirmDialog(`Revoke “${t.name}”? Apps using it stop working immediately.`, { danger: true, confirmLabel: "Revoke" }))) return; const r = await revokePlatformTokenAction(t.id); if (!r.ok) setErr(r.error); router.refresh(); }}><Trash2 size={14} />Revoke</button></td>
             </tr>
           ))}</tbody>
         </table>

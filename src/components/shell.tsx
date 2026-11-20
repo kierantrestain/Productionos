@@ -9,6 +9,7 @@ import { Drawer, ToastProvider } from "./client";
 import { OrgConfigProvider } from "./org-config";
 import type { CustomFieldDefShape, OrgSettingsShape } from "@/lib/customise";
 import { Icon } from "./icons";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export function Shell({ nav, user, children, orgs = [], orgId, config = { settings: {}, customFields: [] } }: { nav: NavItem[]; user: { name: string; role: Role; orgName: string; isDemo: boolean }; children: React.ReactNode; orgs?: { id: string; name: string; isDemo: boolean }[]; orgId?: string; config?: { settings: OrgSettingsShape; customFields: CustomFieldDefShape[] } }) {
   const pathname = usePathname();
@@ -55,6 +56,7 @@ export function Shell({ nav, user, children, orgs = [], orgId, config = { settin
               <Icon name="search" /> <span className="label-long">Search productions, scenes, people…</span><span className="spacer" /><kbd className="mono subtle">⌘K</kbd>
             </button>
             <div className="spacer" />
+            <ThemeToggle />
             {user.isDemo && <span className="badge tone-warn" title="This organisation contains clearly labelled demonstration data, not imported source records.">Demo workspace</span>}
           </header>
           <main id="main" className="content" tabIndex={-1}>{children}</main>

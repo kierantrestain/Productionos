@@ -120,6 +120,7 @@ test.describe.serial("producer journey", () => {
 
   test("hand the shoot over to post and deliver", async () => {
     await page.click("button:has-text('Wrap & hand over to post')");
+    await page.getByRole("dialog").getByRole("button", { name: "Confirm" }).click();
     await expect(page.getByText("Wrapped — post tasks created")).toBeVisible();
     await page.goto(`${productionUrl}?tab=post`);
     await expect(page.getByRole("link", { name: /Ingest & verify rushes/ })).toBeVisible();

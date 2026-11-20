@@ -183,8 +183,8 @@ export function matches(f: FieldDefLite, v: unknown, op: string, want: unknown, 
     case "=": return Number(v) === Number(want); case "!=": return Number(v) !== Number(want);
     case "<": return v !== null && Number(v) < Number(want); case "<=": return v !== null && Number(v) <= Number(want);
     case ">": return v !== null && Number(v) > Number(want); case ">=": return v !== null && Number(v) >= Number(want);
-    case "isBefore": { const d = asDate(v), w = asDate(want); return !!d && !!w && d < w; }
-    case "isAfter": { const d = asDate(v), w = asDate(want); return !!d && !!w && d > w; }
+    case "isBefore": { const d = asDate(v), w = want === "today" ? new Date(dayStr(now)) : asDate(want); return !!d && !!w && d < w; }
+    case "isAfter": { const d = asDate(v), w = want === "today" ? new Date(new Date(dayStr(now)).getTime() + 864e5 - 1) : asDate(want); return !!d && !!w && d > w; }
     case "isToday": { const d = asDate(v); return !!d && dayStr(d) === dayStr(now); }
     case "isWithinNextDays": { const d = asDate(v); const n = Number(want); return !!d && d >= new Date(dayStr(now)) && d <= new Date(now.getTime() + n * 864e5); }
     case "isWithinPastDays": { const d = asDate(v); const n = Number(want); return !!d && d <= now && d >= new Date(now.getTime() - n * 864e5); }

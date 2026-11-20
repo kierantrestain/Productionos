@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { Trash2, Plus } from "lucide-react";
 import { COLORS, FIELD_META, FIELD_TYPES, ROLLUP_FNS, newChoiceId, type FieldOptions, type FieldType, type SelectChoice } from "@/lib/platform/fields";

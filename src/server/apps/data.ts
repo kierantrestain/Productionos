@@ -89,7 +89,7 @@ export async function componentData(c: Ctx2, comp: Component): Promise<Component
   const p = comp.props;
   try {
     switch (comp.type) {
-      case "kpi": {
+      case "kpi": case "progress": {
         if (!p.data?.tableId) return { kind: "none" };
         const q = await query(c, p.data);
         return { kind: "kpi", value: aggregate(q.rows, p.agg, p.fieldId), count: q.rows.length };
@@ -112,10 +112,11 @@ export async function componentData(c: Ctx2, comp: Component): Promise<Component
         series = series.slice(0, 40);
         return { kind: "series", series };
       }
-      case "table": case "kanban": case "activity": {
+      case "table": case "kanban": case "activity": case "calendar": case "gallery": {
         if (!p.data?.tableId) return { kind: "none" };
         const q = await query(c, p.data);
-        const limit = Math.min(Math.max(p.limit ?? (comp.type === "kanban" ? 200 : 25), 1), comp.type === "kanban" ? 500 : 200);
+        const big = comp.type === "kanban" || comp.type === "calendar";
+        const limit = Math.min(Math.max(p.limit ?? (big ? 500 : 25), 1), big ? 1000 : 200);
         return { kind: "rows", fields: lite(q.fields, q.table.primaryFieldId), rows: q.rows.slice(0, limit), total: q.total, primaryFieldId: q.table.primaryFieldId, tableName: q.table.name };
       }
       case "form": {

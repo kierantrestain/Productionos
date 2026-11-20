@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Plus, Send, Pencil, Trash2, Check, X, MessageSquarePlus, Wrench, ShieldCheck } from "lucide-react";
@@ -10,6 +10,7 @@ import { COLORS } from "@/lib/platform/fields";
 import { decideApprovalAction, deleteAgentAction, getThreadAction, saveAgentAction, sendAgentMessageAction } from "@/app/platform-actions";
 import type { BaseMeta } from "@/app/(base)/base/[baseId]/load";
 import { BaseHeader } from "./base-header";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Agent = { id: string; name: string; emoji: string; color: string; role: string | null; instructions: string; tableIds: string[]; canPropose: boolean };
 type Item = { id: string; kind: "user" | "assistant" | "activity"; text: string };
@@ -102,7 +103,7 @@ export function AgentsApp({ meta, ai, agents, activeId, threads, threadId, items
                 <span className="chip">{active.tableIds.length ? `${active.tableIds.length} table${active.tableIds.length > 1 ? "s" : ""}` : "all tables"}</span>
                 <span style={{ flex: 1 }} />
                 {meta.canEdit && <button type="button" className="p-tbtn" onClick={() => setEdit(active)}><Pencil size={14} />Edit</button>}
-                {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Delete agent" onClick={async () => { if (confirm(`Delete ${active.name}? Conversations are removed too.`)) { await deleteAgentAction(active.id); router.push(base); router.refresh(); } }}><Trash2 size={14} /></button>}
+                {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Delete agent" onClick={async () => { if ((await confirmDialog(`Delete ${active.name}? Conversations are removed too.`, { danger: true, confirmLabel: "Delete" }))) { await deleteAgentAction(active.id); router.push(base); router.refresh(); } }}><Trash2 size={14} /></button>}
               </div>
               <div style={{ flex: 1, overflow: "auto", padding: "16px 20px", background: "var(--color-background-muted)" }} aria-live="polite">
                 <div style={{ maxWidth: 820, margin: "0 auto", display: "grid", gap: 10 }}>

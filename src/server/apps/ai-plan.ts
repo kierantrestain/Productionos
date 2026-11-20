@@ -19,11 +19,11 @@ const FTYPES = FIELD_TYPES.filter((t) => !["lookup", "button", "barcode", "aiTex
 const S = z.string();
 const Cond = z.object({ field: S, op: z.enum(["is", "isNot", "isAnyOf", "isNoneOf", "contains", "isEmpty", "isNotEmpty", "isChecked", "isNotChecked", ">", "<", ">=", "<="]), value: S.describe("Choice name for selects; number as text; empty for isEmpty etc.") });
 const Comp = z.object({
-  type: z.enum(["kpi", "chart", "table", "kanban", "activity", "form", "record", "heading", "text", "button"]),
+  type: z.enum(["kpi", "chart", "table", "kanban", "activity", "form", "record", "heading", "text", "button", "calendar", "gallery", "progress"]),
   width: z.number().int().describe("Columns of 12: 3 for KPI cards, 4–8 for charts/tables, 12 for full width"),
   title: S, table: S.describe("Table name the component reads (empty for heading/text/button/record)"),
   aggregation: z.enum(["count", "sum", "avg", "min", "max"]), field: S.describe("Numeric field for sum/avg/min/max, else empty"),
-  groupBy: S.describe("Chart/kanban: field to group by (kanban needs a single select)"), chart: z.enum(["bar", "line", "donut"]),
+  groupBy: S.describe("Chart/kanban: field to group by (kanban needs a single select). Calendar: the date field."), target: z.number().describe("Progress: goal value, else 0"), chart: z.enum(["bar", "line", "donut"]),
   format: z.enum(["number", "currency", "percent", "days"]), fields: z.array(S).describe("Columns for table/kanban, inputs for form"),
   filter: z.array(Cond), relatedVia: S.describe("Detail pages: link field in `table` that points at the page's record, else empty"),
   opensPage: S.describe("Key of a detail page rows open, else empty"), text: S.describe("Heading subtitle or text body"),
@@ -60,7 +60,7 @@ export function checkPlan(p: Plan): string[] {
     if (pg.kind === "detail" && !t.has(pg.table.toLowerCase())) out.push(`Page “${pg.title}” needs an existing table.`);
     for (const c of pg.components) {
       const table = c.type === "record" ? pg.table : c.table;
-      if (["kpi", "chart", "table", "kanban", "activity", "form"].includes(c.type) && !t.has(table.toLowerCase())) { out.push(`“${c.title}” on “${pg.title}” uses unknown table “${table}”.`); continue; }
+      if (["kpi", "chart", "table", "kanban", "activity", "form", "calendar", "gallery", "progress"].includes(c.type) && !t.has(table.toLowerCase())) { out.push(`“${c.title}” on “${pg.title}” uses unknown table “${table}”.`); continue; }
       for (const f of [c.field, c.groupBy, c.relatedVia, ...c.fields, ...c.filter.map((x) => x.field)].filter(Boolean)) if (table && !hasField(table, f)) out.push(`“${c.title}” refers to unknown field “${table}.${f}”.`);
       if (c.opensPage && !keys.has(c.opensPage)) out.push(`“${c.title}” opens unknown page “${c.opensPage}”.`);
     }
@@ -89,7 +89,7 @@ export function planToSpecs(p: Plan): { base: BaseSpec; app: AppSpec } {
       props: {
         title: c.title || undefined, subtitle: c.type === "heading" ? c.text : undefined, text: c.type === "text" ? c.text : undefined,
         ...(c.table && c.type !== "record" && c.type !== "button" ? { data: { table: c.table, filter: c.filter.length ? c.filter.map((x) => ({ field: x.field, op: x.op, value: x.value === "" ? undefined : x.value })) : undefined, rel: c.relatedVia || undefined } } : {}),
-        agg: c.type === "kpi" || c.type === "chart" ? c.aggregation : undefined, field: c.field || undefined, group: c.groupBy || undefined,
+        agg: c.type === "kpi" || c.type === "chart" || c.type === "progress" ? c.aggregation : undefined, field: c.field || undefined, group: c.type !== "calendar" ? c.groupBy || undefined : undefined, date_field: c.type === "calendar" ? c.groupBy || undefined : undefined, target: c.type === "progress" ? c.target || 100 : undefined,
         chart: c.type === "chart" ? c.chart : undefined, format: c.format, fields: c.fields.length ? c.fields : undefined, detail: c.opensPage || undefined,
         allowMove: c.type === "kanban" ? true : undefined, allowEdit: c.type === "record" ? true : undefined, showRelated: c.type === "record" ? true : undefined, showComments: c.type === "record" ? true : undefined,
         label: c.type === "button" ? c.title : undefined,

@@ -198,3 +198,52 @@ describe("AI full-system planner (MOCK-ONLY model)", () => {
     __setAiClient(null);
   });
 });
+
+describe("Interface layouts (base → Interfaces → New interface)", () => {
+  it("every layout builds a valid app from the table's real fields, and its components return live data", async () => {
+    const { createInterfaceApp, LAYOUTS } = await import("@/server/apps/presets");
+    const crm = await createAppFromTemplate(owner, "agency-crm");
+    const rt0 = await resolveRuntime(owner, crm.slug, false);
+    const baseId = rt0.app.baseId;
+    for (const layout of LAYOUTS) {
+      const a = await createInterfaceApp(owner, { baseId, name: `Layout ${layout}`, layout });
+      await publishApp(owner, a.id);
+      const rt = await resolveRuntime(owner, a.slug, false);
+      const home = findPage(rt)!;
+      expect(home.components.length).toBeGreaterThan(0);
+      for (const c of home.components) {
+        const d = await componentData({ ctx: owner, rt, page: home }, c);
+        expect(d.kind, `${layout}/${c.type}`).not.toBe("error");
+      }
+    }
+    // a reader can't create interfaces
+    await expect(createInterfaceApp(reader, { baseId, name: "Nope", layout: "dashboard" })).rejects.toThrow();
+  });
+
+  it("calendar and gallery components return rows; progress returns a KPI value", async () => {
+    const { createInterfaceApp } = await import("@/server/apps/presets");
+    const rt0 = await resolveRuntime(owner, (await createAppFromTemplate(owner, "agency-crm")).slug, false);
+    const a = await createInterfaceApp(owner, { baseId: rt0.app.baseId, name: "Dash", layout: "dashboard" });
+    const cfg = (await getAppForBuilder(owner, a.id)).app.draft as unknown as AppConfig;
+    const progress = cfg.pages[0].components.find((c) => c.type === "progress")!;
+    const rt = await resolveRuntime(owner, a.slug, true);
+    expect((await componentData({ ctx: owner, rt, page: cfg.pages[0] }, progress)).kind).toBe("kpi");
+    const tableId = progress.props.data!.tableId;
+    for (const type of ["calendar", "gallery"] as const) {
+      const d = await componentData({ ctx: owner, rt, page: cfg.pages[0] }, { id: `x_${type}`, type, w: 12, props: { data: { tableId } } });
+      expect(d.kind).toBe("rows");
+    }
+  });
+});
+
+describe("relative date filters", () => {
+  it("isBefore/isAfter accept “today”", async () => {
+    const { matches } = await import("@/server/platform/query");
+    const f = { id: "d", name: "Due", type: "date", options: {} } as never;
+    const now = new Date("2026-11-20T10:00:00Z");
+    expect(matches(f, "2026-11-19", "isBefore", "today", "", now)).toBe(true);
+    expect(matches(f, "2026-11-20", "isBefore", "today", "", now)).toBe(false);
+    expect(matches(f, "2026-11-21", "isAfter", "today", "", now)).toBe(true);
+    expect(matches(f, "2026-11-20", "isAfter", "today", "", now)).toBe(false);
+  });
+});

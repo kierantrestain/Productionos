@@ -5,6 +5,7 @@ import { ROLES, ROLE_LABELS, type Role } from "@/lib/permissions";
 import { dateTime } from "@/lib/format";
 import { createTokenAction, inviteAction, revokeTokenAction, setDisabledAction, setProductionsAction, setRoleAction } from "@/app/actions";
 import { Drawer, useRun } from "./client";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Member = { userId: string; name: string; email: string; role: string; disabledAt: string | null; lastLoginAt: string | null; productionIds: string[] };
 
@@ -24,11 +25,11 @@ export function AdminMembers({ me, members, invites, productions }: { me: string
           <tbody>{members.map((m) => (
             <tr key={m.userId}>
               <td style={{ fontWeight: 560 }}>{m.name}</td><td>{m.email}</td>
-              <td><select className="select cell-edit" aria-label={`Role for ${m.name}`} value={m.role} disabled={m.userId === me || pending} onChange={(e) => confirm(`Change ${m.name}'s role? Their sessions will be signed out.`) && run(setRoleAction(m.userId, e.target.value as Role), "Role updated").then(ok)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></td>
+              <td><select className="select cell-edit" aria-label={`Role for ${m.name}`} value={m.role} disabled={m.userId === me || pending} onChange={async (e) => (await confirmDialog(`Change ${m.name}'s role? Their sessions will be signed out.`)) && run(setRoleAction(m.userId, e.target.value as Role), "Role updated").then(ok)}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select></td>
               <td>{["org_admin", "executive", "finance_legal", "commercial"].includes(m.role) ? <span className="subtle">All</span> : <button className="btn btn-sm" onClick={() => { setEditing(m); setSel(m.productionIds); }}>{m.productionIds.length} assigned</button>}</td>
               <td>{dateTime(m.lastLoginAt)}</td>
               <td>{m.disabledAt ? <span className="badge tone-bad">Disabled</span> : <span className="badge tone-ok">Active</span>}</td>
-              <td>{m.userId !== me && <button className="btn btn-quiet btn-sm" onClick={() => confirm(`${m.disabledAt ? "Re-enable" : "Disable"} ${m.name}?`) && run(setDisabledAction(m.userId, !m.disabledAt), "Updated").then(ok)}>{m.disabledAt ? "Enable" : "Disable"}</button>}</td>
+              <td>{m.userId !== me && <button className="btn btn-quiet btn-sm" onClick={async () => (await confirmDialog(`${m.disabledAt ? "Re-enable" : "Disable"} ${m.name}?`)) && run(setDisabledAction(m.userId, !m.disabledAt), "Updated").then(ok)}>{m.disabledAt ? "Enable" : "Disable"}</button>}</td>
             </tr>))}</tbody></table></div>
       </section>
       <section className="panel"><div className="panel-head"><h2>Invite someone</h2></div>
@@ -64,7 +65,7 @@ export function AdminTokens({ tokens }: { tokens: { id: string; name: string; sc
         <button className="btn btn-primary" disabled={pending || !scopes.length}>Create token</button>
       </form>
       {shown && <div className="notice warn" style={{ margin: "0 16px 16px" }}><div>Copy this token now — it will not be shown again: <code className="mono" style={{ wordBreak: "break-all" }}>{shown}</code></div></div>}
-      <ul className="list">{tokens.map((t) => <li key={t.id}><strong style={{ flex: 1 }}>{t.name}</strong><span className="mono subtle" style={{ fontSize: 12 }}>{t.scopes.join(", ")}</span><span className="subtle">{t.lastUsedAt ? `used ${dateTime(t.lastUsedAt)}` : "never used"}</span>{t.revokedAt ? <span className="badge tone-bad">Revoked</span> : <button className="btn btn-sm btn-danger" onClick={() => confirm(`Revoke ${t.name}?`) && run(revokeTokenAction(t.id), "Revoked").then((r) => r !== undefined && router.refresh())}>Revoke</button>}</li>)}
+      <ul className="list">{tokens.map((t) => <li key={t.id}><strong style={{ flex: 1 }}>{t.name}</strong><span className="mono subtle" style={{ fontSize: 12 }}>{t.scopes.join(", ")}</span><span className="subtle">{t.lastUsedAt ? `used ${dateTime(t.lastUsedAt)}` : "never used"}</span>{t.revokedAt ? <span className="badge tone-bad">Revoked</span> : <button className="btn btn-sm btn-danger" onClick={async () => (await confirmDialog(`Revoke ${t.name}?`, { danger: true, confirmLabel: "Revoke" })) && run(revokeTokenAction(t.id), "Revoked").then((r) => r !== undefined && router.refresh())}>Revoke</button>}</li>)}
         {!tokens.length && <li className="subtle">No tokens.</li>}</ul>
     </section>
   );

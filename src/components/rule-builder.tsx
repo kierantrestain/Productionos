@@ -7,6 +7,7 @@ import { createRuleAction, setRuleStatusAction } from "@/app/actions";
 import { useRun } from "./client";
 import { useEntityConfig } from "./org-config";
 import { Icon } from "./icons";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Rule = { id: string; name: string; status: string; conditions: { entity: string; event: string; field: string; value: string; action: { type: string; title?: string; priority?: string; dueInDays?: number | null; field?: string; value?: unknown } } };
 type Run = { workflowKey: string; status: string; at: string; result: unknown };
@@ -79,7 +80,7 @@ export function RuleBuilder({ rules, runs, ruleKeys, isAdmin }: { rules: Rule[];
                 <span className={`badge ${x.status === "active" ? "tone-ok" : "tone-warn"}`}>{humanize(x.status)}</span>
                 {isAdmin && <>
                   <button className="btn btn-sm" onClick={() => run(setRuleStatusAction(x.id, x.status === "active" ? "paused" : "active")).then((v) => v !== undefined && router.refresh())}>{x.status === "active" ? "Pause" : "Activate"}</button>
-                  <button className="btn btn-quiet btn-sm btn-danger" onClick={() => confirm(`Delete rule “${x.name}”? Its run history is kept.`) && run(setRuleStatusAction(x.id, "archived")).then((v) => v !== undefined && router.refresh())}>Delete</button>
+                  <button className="btn btn-quiet btn-sm btn-danger" onClick={async () => (await confirmDialog(`Delete rule “${x.name}”? Its run history is kept.`, { danger: true, confirmLabel: "Delete" })) && run(setRuleStatusAction(x.id, "archived")).then((v) => v !== undefined && router.refresh())}>Delete</button>
                 </>}
               </li>
             );

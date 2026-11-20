@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { ChevronUp, ChevronDown, X, Trash2, MessageSquare, History, Lock, Sparkles } from "lucide-react";
 import { isComputed } from "@/lib/platform/fields";

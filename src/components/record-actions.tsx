@@ -8,6 +8,7 @@ import {
   markDeliveredAction, markSignedAction, requestApprovalAction, requestSignatureAction,
 } from "@/app/actions";
 import { Drawer, useRun } from "./client";
+import { promptDialog } from "@/components/ui/dialogs";
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -51,7 +52,7 @@ export function RecordActions({ entity, row, role, attachments = [] }: { entity:
       for (const to of next[status] ?? []) a.push(<button key={to} className="btn" disabled={pending} onClick={() => ok(run(advanceDeliverableAction(row.id, to), "Updated"))}>Move to {to.replace(/_/g, " ")}</button>);
       if (["ready_for_approval", "qc"].includes(status) && ["org_admin", "executive", "producer"].includes(role)) {
         a.push(<button key="ap" className="btn btn-primary" disabled={pending} onClick={() => ok(run(approveDeliverableAction(row.id, "approved"), "Deliverable approved"))}>Approve deliverable</button>);
-        a.push(<button key="rj" className="btn btn-danger" disabled={pending} onClick={() => { const n = prompt("Reason for rejection"); if (n) ok(run(approveDeliverableAction(row.id, "rejected", n), "Rejected")); }}>Reject</button>);
+        a.push(<button key="rj" className="btn btn-danger" disabled={pending} onClick={async () => { const n = (await promptDialog("Reason for rejection")); if (n) ok(run(approveDeliverableAction(row.id, "rejected", n), "Rejected")); }}>Reject</button>);
       }
       if (status === "approved") a.push(<button key="dl" className="btn btn-primary" disabled={pending} onClick={() => ok(run(markDeliveredAction(row.id), "Marked delivered"))}>Mark delivered</button>);
       break;

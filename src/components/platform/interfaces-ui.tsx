@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { BarChart3, Hash, LineChart, PieChart, Table2, Plus, Pencil, Trash2, Check } from "lucide-react";
@@ -9,6 +9,8 @@ import { computeWidgetsAction, deleteInterfaceAction, saveInterfaceAction } from
 import type { Widget, WidgetData } from "@/server/platform/interfaces";
 import type { BaseMeta } from "@/app/(base)/base/[baseId]/load";
 import { BaseHeader } from "./base-header";
+import { InterfacesSidebar, type IfaceApp } from "./interfaces-home";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Iface = { id: string; name: string; widgets: Widget[] };
 const SLOTS = 8;
@@ -18,12 +20,12 @@ const TYPE_ICON = { number: Hash, bar: BarChart3, line: LineChart, pie: PieChart
 const sel: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 8px" };
 const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", margin: "10px 0 4px" };
 
-export function InterfacesApp({ meta, interfaces, activeId }: { meta: BaseMeta; interfaces: Iface[]; activeId?: string }) {
+export function InterfacesApp({ meta, interfaces, activeId, apps, startEditing }: { meta: BaseMeta; interfaces: Iface[]; activeId?: string; apps: IfaceApp[]; startEditing?: boolean }) {
   const router = useRouter();
   const active = interfaces.find((i) => i.id === activeId) ?? interfaces[0];
   const [widgets, setWidgets] = useState<Widget[]>(active?.widgets ?? []);
   const [data, setData] = useState<Record<string, WidgetData>>({});
-  const [editing, setEditing] = useState(meta.canEdit && !!active && !active.widgets.length);
+  const [editing, setEditing] = useState(meta.canEdit && !!active && (!!startEditing || !active.widgets.length));
   const [dlg, setDlg] = useState<Widget | null>(null);
   const [err, setErr] = useState("");
   useEffect(() => { setWidgets(active?.widgets ?? []); }, [active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -41,25 +43,11 @@ export function InterfacesApp({ meta, interfaces, activeId }: { meta: BaseMeta; 
     const r = await saveInterfaceAction(meta.base.id, { id: active.id, name: active.name, widgets: ws });
     if (!r.ok) setErr(r.error);
   };
-  const create = async () => {
-    const name = prompt("Interface name", "Overview"); if (!name?.trim()) return;
-    const r = await saveInterfaceAction(meta.base.id, { name, widgets: [] });
-    if (!r.ok) { setErr(r.error); return; }
-    router.push(`/base/${meta.base.id}/interfaces?i=${r.data.id}`); router.refresh(); setEditing(true);
-  };
-
   return (
     <div className="p-base">
       <BaseHeader base={meta.base} role={meta.role} active="interfaces" />
       <div className="p-body">
-        <aside className="p-views" aria-label="Interfaces">
-          <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
-            <div className="p-sect">Interfaces</div>
-            {interfaces.map((i) => <a key={i.id} href={`/base/${meta.base.id}/interfaces?i=${i.id}`} className="p-viewitem" aria-current={i.id === active?.id ? "page" : undefined}><BarChart3 size={15} />{i.name}</a>)}
-            {!interfaces.length && <p style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "4px 10px" }}>Dashboards with live numbers and charts built from your tables.</p>}
-          </div>
-          {meta.canEdit && <div style={{ borderTop: "1px solid var(--color-border)", padding: 8 }}><button type="button" className="p-viewitem" onClick={create}><Plus size={15} />New interface</button></div>}
-        </aside>
+        <InterfacesSidebar meta={meta} apps={apps} dashboards={interfaces.map((x) => ({ id: x.id, name: x.name }))} activeId={active?.id} />
         <main className="p-main">
           {active ? (
             <>
@@ -69,7 +57,7 @@ export function InterfacesApp({ meta, interfaces, activeId }: { meta: BaseMeta; 
                 {err && <span style={{ color: "var(--color-text-error)", fontSize: 12 }}>{err}</span>}
                 {meta.canEdit && editing && <button type="button" className="p-tbtn" onClick={() => setDlg({ id: crypto.randomUUID(), type: "bar", title: "", tableId: meta.tables[0]?.id ?? "", agg: "count", width: 1 })}><Plus size={14} />Add widget</button>}
                 {meta.canEdit && <button type="button" className={`p-tbtn ${editing ? "on-blue" : ""}`} onClick={() => setEditing((e) => !e)}>{editing ? <><Check size={14} />Done</> : <><Pencil size={14} />Edit</>}</button>}
-                {meta.canEdit && editing && <button type="button" className="p-tbtn" style={{ color: "var(--color-text-red)" }} onClick={async () => { if (!confirm(`Delete interface “${active.name}”?`)) return; await deleteInterfaceAction(active.id); router.push(`/base/${meta.base.id}/interfaces`); router.refresh(); }}><Trash2 size={14} /></button>}
+                {meta.canEdit && editing && <button type="button" className="p-tbtn" style={{ color: "var(--color-text-red)" }} onClick={async () => { if (!(await confirmDialog(`Delete interface “${active.name}”?`, { danger: true, confirmLabel: "Delete" }))) return; await deleteInterfaceAction(active.id); router.push(`/base/${meta.base.id}/interfaces`); router.refresh(); }}><Trash2 size={14} /></button>}
               </div>
               {widgets.length ? (
                 <div className="if-grid">
@@ -88,14 +76,13 @@ export function InterfacesApp({ meta, interfaces, activeId }: { meta: BaseMeta; 
                 </div>
               ) : (
                 <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
-                  <EmptyState title="No widgets yet" description={meta.canEdit ? "Choose Edit → Add widget to add numbers, bar, line and donut charts, or record lists." : "An owner or creator hasn't added widgets yet."} />
+                  <EmptyState title="No widgets yet" description={meta.canEdit ? "Choose Add widget (top right) for numbers, bar, line and donut charts, or record lists. For multi-page apps with boards, calendars and forms, create an interface with the builder." : "An owner or creator hasn't added widgets yet."} />
                 </div>
               )}
             </>
           ) : (
             <div style={{ display: "grid", placeItems: "center", flex: 1 }}>
-              <EmptyState title="No interfaces yet" description="Interfaces turn tables into live dashboards — totals, pipelines, trends and lists — that respect everyone's permissions." />
-              {meta.canEdit && <Button label="Create an interface" variant="primary" onClick={create} />}
+              <EmptyState title="Dashboard not found" description="It may have been deleted." />
             </div>
           )}
         </main>
@@ -140,6 +127,7 @@ function WidgetDialog({ meta, initial, onClose, onSave }: { meta: BaseMeta; init
       {w.type === "list" && <><label style={lbl} htmlFor="w-limit">Rows</label><input id="w-limit" type="number" min={1} max={50} style={sel} value={w.limit ?? 10} onChange={(e) => set({ limit: Number(e.target.value) })} /></>}
       <label style={lbl}>Width</label>
       <div style={{ display: "flex", gap: 6 }}>{([1, 2, 3] as const).map((n) => <button key={n} type="button" className={`p-tbtn ${(w.width ?? 1) === n ? "on-blue" : ""}`} onClick={() => set({ width: n })}>{n === 1 ? "⅓" : n === 2 ? "⅔" : "Full"}</button>)}</div>
+      {(() => { const why = !w.tableId ? "Choose a table." : (w.type !== "number" && w.type !== "list" && !w.groupFieldId) ? (w.type === "line" ? "Choose a date field to plot over time." : "Choose a field to group by.") : (!!w.agg && w.agg !== "count" && !w.fieldId) ? "Choose which field to measure." : ""; return why ? <p style={{ margin: "14px 0 0", fontSize: 13, color: "var(--color-text-secondary)" }}>{why}</p> : null; })()}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
         <Button label="Cancel" onClick={onClose} />
         <Button label="Save widget" variant="primary" isDisabled={!w.tableId || (w.type !== "number" && w.type !== "list" && !w.groupFieldId) || (!!w.agg && w.agg !== "count" && !w.fieldId)} onClick={() => onSave(w)} />

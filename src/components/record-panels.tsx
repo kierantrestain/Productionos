@@ -5,6 +5,7 @@ import { dateTime, humanize } from "@/lib/format";
 import { archiveAttachmentAction, commentAction } from "@/app/actions";
 import { useRun, useToast } from "./client";
 import { Icon } from "./icons";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Att = { id: string; filename: string; sizeBytes: number; sha256: string; createdAt: string; contentType: string };
 
@@ -42,7 +43,7 @@ export function AttachmentsPanel({ entity, id, items, canWrite }: { entity: stri
                 <a href={`/api/attachments/${a.id}`} style={{ fontWeight: 550 }}>{a.filename}</a>
                 <div className="subtle mono" style={{ fontSize: 11 }} title={`SHA-256 ${a.sha256}`}>{(a.sizeBytes / 1024).toFixed(1)} KB · sha256 {a.sha256.slice(0, 12)}… · {dateTime(a.createdAt)}</div>
               </div>
-              {canWrite && <button className="btn btn-quiet btn-sm" aria-label={`Archive ${a.filename}`} onClick={async () => { if (confirm(`Archive ${a.filename}? It is retained and can be restored by an admin.`) && await run(archiveAttachmentAction(a.id), "Archived") !== undefined) router.refresh(); }}><Icon name="x" /></button>}
+              {canWrite && <button className="btn btn-quiet btn-sm" aria-label={`Archive ${a.filename}`} onClick={async () => { if ((await confirmDialog(`Archive ${a.filename}? It is retained and can be restored by an admin.`, { danger: true, confirmLabel: "Archive" })) && await run(archiveAttachmentAction(a.id), "Archived") !== undefined) router.refresh(); }}><Icon name="x" /></button>}
             </li>
           ))}
         </ul>

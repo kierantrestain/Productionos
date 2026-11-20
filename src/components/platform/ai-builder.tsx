@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@astryxdesign/core/Button";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Sparkles, Table2, LayoutDashboard, Zap, AlertTriangle } from "lucide-react";
 import { aiStatusAction } from "@/app/platform-actions";
 import { applyPlanAction, planSystemAction } from "@/app/apps-actions";

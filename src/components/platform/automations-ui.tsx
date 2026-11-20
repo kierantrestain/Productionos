@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Dialog } from "@astryxdesign/core/Dialog";
+import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Zap, Plus, Trash2, Pencil, History, FlaskConical, GitBranch, Sparkles, Send, MessageSquare, PenLine, Link2, FilePlus2, Clock, Webhook, Check, X } from "lucide-react";
@@ -12,6 +12,7 @@ import type { BaseMeta } from "@/app/(base)/base/[baseId]/load";
 import { BaseHeader } from "./base-header";
 import { ConditionList } from "./toolbar";
 import type { ClientField } from "./types";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type Auto = { id: string; name: string; isEnabled: boolean; trigger: Trigger; actions: Action[]; lastRunAt: string | null; runCount: number; failCount: number; webhookToken: string | null };
 export type ApprovalRow = { id: string; kind: string; summary: string; status: string; source: string; createdAt: string; result: Record<string, unknown> | null };
@@ -59,7 +60,8 @@ export function AutomationsApp({ meta, automations, approvals }: { meta: BaseMet
           </div>
           {err && <p style={{ color: "var(--color-text-error)", marginBottom: 8 }}>{err}</p>}
           {pending.length > 0 && <ApprovalQueue items={pending} onDone={() => router.refresh()} />}
-          {!automations.length && <EmptyState title="No automations yet" description="For example: when a deal moves to Won, create an engagement linked to it; every morning, flag overdue invoices; when a form webhook arrives, create a lead." />}
+          {!automations.length && <EmptyState title="No automations yet" description="Start from a recipe below (built from your own tables and fields), or choose New automation. Recipes open in the editor switched off, so you can test them before turning them on." />}
+          {meta.canEdit && <Recipes meta={meta} onPick={(a) => setEdit(a)} compact={automations.length > 0} />}
           <div style={{ display: "grid", gap: 10 }}>
             {automations.map((a) => (
               <article key={a.id} className="p-basecard" style={{ alignItems: "flex-start" }}>
@@ -73,7 +75,7 @@ export function AutomationsApp({ meta, automations, approvals }: { meta: BaseMet
                 <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 13 }}><input type="checkbox" checked={a.isEnabled} disabled={!meta.canEdit} onChange={() => toggle(a)} />{a.isEnabled ? "On" : "Off"}</label>
                 <button type="button" className="p-tbtn" aria-label="Run history" onClick={async () => { const r = await automationRunsAction(a.id); if (r.ok) setRuns({ auto: a, rows: r.data }); }}><History size={14} /></button>
                 {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Edit" onClick={() => setEdit(a)}><Pencil size={14} /></button>}
-                {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Delete" onClick={async () => { if (confirm(`Delete “${a.name}”?`)) { await deleteAutomationAction(a.id); router.refresh(); } }}><Trash2 size={14} /></button>}
+                {meta.canEdit && <button type="button" className="p-tbtn" aria-label="Delete" onClick={async () => { if ((await confirmDialog(`Delete “${a.name}”?`, { danger: true, confirmLabel: "Delete" }))) { await deleteAutomationAction(a.id); router.refresh(); } }}><Trash2 size={14} /></button>}
               </article>
             ))}
           </div>
@@ -245,3 +247,50 @@ function StepList({ meta, triggerTable, steps, onChange, fieldsOf, depth }: { me
 }
 
 function Origin() { const [o, setO] = useState(""); useEffect(() => setO(location.origin), []); return <>{o}</>; }
+
+
+/** One-click starting points built from this base's real tables and fields. They open in the editor, switched off. */
+function Recipes({ meta, onPick, compact }: { meta: BaseMeta; onPick: (a: Auto) => void; compact: boolean }) {
+  const [open, setOpen] = useState(!compact);
+  const out: { title: string; desc: string; icon: React.ReactNode; auto: Auto }[] = [];
+  const mk = (name: string, trigger: Trigger, actions: Action[]): Auto => ({ id: "", name, isEnabled: false, trigger, actions, lastRunAt: null, runCount: 0, failCount: 0, webhookToken: null });
+  for (const t of meta.tables.slice(0, 6)) {
+    const fs = meta.fields.filter((f) => f.tableId === t.id);
+    const prim = fs.find((f) => f.id === t.primaryFieldId)?.name ?? "Name";
+    const sel = fs.find((f) => f.type === "singleSelect" && ((f.options as { choices?: unknown[] }).choices?.length ?? 0) >= 2);
+    const choices = ((sel?.options as { choices?: { id: string; name: string }[] })?.choices) ?? [];
+    const last = choices[choices.length - 1];
+    const date = fs.find((f) => f.type === "date" || f.type === "dateTime");
+    const long = fs.find((f) => f.type === "longText");
+    const link = fs.find((f) => f.type === "link" && (f.options as { linkedTableId?: string }).linkedTableId !== t.id);
+    if (sel && last) out.push({ title: `When ${t.name.toLowerCase()} move to ${last.name}`, desc: `Watch ${sel.name}; when it becomes “${last.name}”, add a comment for the team.`, icon: <Check size={16} />,
+      auto: mk(`${t.name}: ${sel.name} → ${last.name}`, { type: "record_matches", tableId: t.id, watchFieldIds: [sel.id], conditions: { conjunction: "and", conditions: [{ fieldId: sel.id, op: "is", value: last.id }] } }, [{ type: "add_comment", body: `{${prim}} moved to ${last.name}.` }]) });
+    if (date) out.push({ title: `Daily overdue check on ${t.name.toLowerCase()}`, desc: `Every morning at 08:00, comment on ${t.name.toLowerCase()} whose ${date.name} has passed${sel && last ? ` and aren't ${last.name}` : ""}.`, icon: <Clock size={16} />,
+      auto: mk(`${t.name}: overdue check`, { type: "schedule", tableId: t.id, schedule: { every: "day", hour: 8 }, conditions: { conjunction: "and", conditions: [{ fieldId: date.id, op: "isBefore", value: "today" }, ...(sel && last ? [{ fieldId: sel.id, op: "isNot", value: last.id }] : [])] } }, [{ type: "add_comment", body: `Overdue: ${date.name} was {${date.name}}.` }]) });
+    if (link) {
+      const other = (link.options as { linkedTableId: string }).linkedTableId;
+      const back = meta.fields.find((f) => f.tableId === other && f.type === "link" && (f.options as { linkedTableId?: string }).linkedTableId === t.id);
+      const otherT = meta.tables.find((x) => x.id === other);
+      if (otherT && back && otherT.primaryFieldId) out.push({ title: `New ${t.name.toLowerCase()} → linked ${otherT.name.toLowerCase()}`, desc: `When a record is added to ${t.name}, create a record in ${otherT.name} linked back to it.`, icon: <Link2 size={16} />,
+        auto: mk(`${t.name}: create linked ${otherT.name.toLowerCase()}`, { type: "record_created", tableId: t.id }, [{ type: "create_record", tableId: other, linkFieldId: back.id, values: { [otherT.primaryFieldId]: `Follow-up: {${prim}}` } }]) });
+    }
+    if (long) out.push({ title: `AI summary for ${t.name.toLowerCase()}`, desc: `When a record is created, write a short summary into ${long.name} (needs the AI key to be configured).`, icon: <Sparkles size={16} />,
+      auto: mk(`${t.name}: AI summary`, { type: "record_created", tableId: t.id }, [{ type: "ai_generate", fieldId: long.id, prompt: "Summarise this record in two sentences for a busy manager." }]) });
+    out.push({ title: `Note every new ${t.name.replace(/s$/, "").toLowerCase()}`, desc: `When a record is created in ${t.name}, add a comment so the team sees it in the activity feed.`, icon: <FilePlus2 size={16} />,
+      auto: mk(`${t.name}: note new records`, { type: "record_created", tableId: t.id }, [{ type: "add_comment", body: `New: {${prim}}.` }]) });
+  }
+  if (!out.length) return null;
+  return (
+    <section style={{ margin: "8px 0 18px" }} aria-label="Recipes">
+      <button type="button" className="p-tbtn" onClick={() => setOpen((o) => !o)} aria-expanded={open}><Sparkles size={14} />{open ? "Hide recipes" : `Recipes for this base (${out.length})`}</button>
+      {open && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 10, marginTop: 10 }}>
+        {out.slice(0, 12).map((r) => (
+          <button key={r.auto.name} type="button" className="if-layout" onClick={() => onPick(r.auto)} style={{ background: "var(--color-background-card)" }}>
+            <span style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--color-text-primary)", fontSize: 14 }}><span style={{ color: "var(--color-accent)", display: "inline-flex" }}>{r.icon}</span><strong>{r.title}</strong></span>
+            <span>{r.desc}</span>
+          </button>
+        ))}
+      </div>}
+    </section>
+  );
+}

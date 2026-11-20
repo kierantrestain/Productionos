@@ -29,6 +29,7 @@ test.describe.serial("apps built with the no-code builder", () => {
     await p.getByRole("region", { name: "Active deals" }).getByText("Horizon Rebrand").click();
     await p.waitForURL(/\/deal\//);
     await p.getByRole("button", { name: "Mark as won" }).click();
+    await p.getByRole("dialog").getByRole("button", { name: "Confirm" }).click(); // in-app confirmation, not a browser pop-up
     await expect(p.getByText("Updated.")).toBeVisible();
     await p.reload();
     await expect(p.locator(".ap-fields")).toContainText("Won");
@@ -58,7 +59,8 @@ test.describe.serial("apps built with the no-code builder", () => {
     await expect(p.getByText(/Published v2/)).toBeVisible();
     await app.reload(); await expect(app.locator(".ap-content")).toContainText("E2E heading");
     await p.getByRole("button", { name: "Versions" }).click();
-    await Promise.all([p.waitForEvent("framenavigated", { timeout: 20_000 }), p.getByRole("dialog").getByRole("button", { name: "Roll back" }).first().click()]);
+    await p.getByRole("dialog").getByRole("button", { name: "Roll back" }).first().click();
+    await Promise.all([p.waitForEvent("framenavigated", { timeout: 20_000 }), p.getByRole("button", { name: "Confirm", exact: true }).click()]);
     await p.waitForLoadState("networkidle");
     await app.reload(); await expect(app.locator(".ap-content")).not.toContainText("E2E heading");
     await p.context().close();

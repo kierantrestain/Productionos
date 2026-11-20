@@ -10,6 +10,7 @@ import type { CustomFieldDefShape } from "@/lib/customise";
 import { Drawer, FieldInput, finalise, useRun, useToast } from "./client";
 import { RecordForm } from "./record-form";
 import { Icon } from "./icons";
+import { confirmDialog, promptDialog } from "@/components/ui/dialogs";
 
 export type TableRow = Record<string, unknown> & { id: string; version: number };
 export interface TableState { q?: string; sort?: string; dir?: "asc" | "desc"; filters: Record<string, string>; archived?: boolean; page: number; pageSize: number }
@@ -83,16 +84,16 @@ export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed 
   async function batch(kind: "archive" | "restore" | "status", value?: string) {
     const ids = [...selected];
     if (!ids.length) return;
-    if (kind === "archive" && !confirm(`Archive ${ids.length} record(s)? They can be restored from “Show archived”.`)) return;
+    if (kind === "archive" && !(await confirmDialog(`Archive ${ids.length} record(s)? They can be restored from “Show archived”.`, { danger: true, confirmLabel: "Archive" }))) return;
     const res = kind === "status" ? await run(batchUpdateRecords(entity, ids, { [statusField!.key]: value }), `Updated ${ids.length}`) : await run(archiveRecords(entity, ids, kind === "restore"), kind === "restore" ? "Restored" : "Archived");
     if (res !== undefined) { setSelected(new Set()); router.refresh(); }
   }
 
   async function saveView() {
-    const name = prompt("Name this view");
+    const name = (await promptDialog("Name this view"));
     if (!name) return;
     const config = { q: state.q, filters: state.filters, sort: state.sort, dir: state.dir, productionId };
-    const shared = confirm("Share this view with your organisation? (Cancel = only you)");
+    const shared = (await confirmDialog("Share this view with your organisation? (Cancel = only you)"));
     if (await run(saveViewAction(entity, name, config, shared), "View saved")) router.refresh();
   }
   const applyView = (cfg: Record<string, unknown>) => {
@@ -130,7 +131,7 @@ export function EntityTable({ entity, rows, refs, total, state, canWrite, fixed 
           {savedViews.map((v) => <option key={v.id} value={v.id}>{v.name}{v.mine ? "" : " · shared"}</option>)}
         </select>
         <button className="btn btn-quiet btn-sm" onClick={saveView}>Save view</button>
-        {savedViews.some((v) => v.mine) && <button className="btn btn-quiet btn-sm" onClick={async () => { const v = savedViews.filter((x) => x.mine); const name = prompt(`Delete which view? ${v.map((x) => x.name).join(", ")}`); const m = v.find((x) => x.name === name); if (m && await run(deleteViewAction(m.id), "View deleted")) router.refresh(); }}>Manage</button>}
+        {savedViews.some((v) => v.mine) && <button className="btn btn-quiet btn-sm" onClick={async () => { const v = savedViews.filter((x) => x.mine); const name = (await promptDialog(`Delete which view? ${v.map((x) => x.name).join(", ")}`)); const m = v.find((x) => x.name === name); if (m && await run(deleteViewAction(m.id), "View deleted")) router.refresh(); }}>Manage</button>}
         <div className="spacer" />
         <label className="check" style={{ fontSize: 12 }}><input type="checkbox" checked={!!state.archived} onChange={(e) => setParams({ archived: e.target.checked ? "1" : null })} /> Show archived</label>
         <a className="btn btn-quiet btn-sm" href={exportHref} download>Export CSV</a>

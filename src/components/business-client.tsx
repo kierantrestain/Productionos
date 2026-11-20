@@ -5,6 +5,7 @@ import { useState } from "react";
 import { date, dateTime, humanize, money } from "@/lib/format";
 import { cancelMessagesAction, confirmMessagesAction, decideApprovalAction, retryEventAction, runQueueAction, setWorkflowStatusAction, updateRecord, withdrawApprovalAction } from "@/app/actions";
 import { Drawer, useRun } from "./client";
+import { alertDialog, confirmDialog } from "@/components/ui/dialogs";
 
 export function ApprovalRow({ a, chain, href, isMine }: { a: { id: string; title: string; kind: string; amountMinor: number | null; currency: string | null; requiredRole: string; status: string; createdAt: string; canDecide: boolean; decisionNote: string | null }; chain: { decision: string; actorRole: string; at: string; note: string | null; actor: string }[]; href: string | null; isMine: boolean }) {
   const router = useRouter();
@@ -79,7 +80,7 @@ export function OutboxReview({ messages, provider }: { messages: { id: string; t
     <section className="panel" aria-label="Outbound messages">
       <div className="panel-head"><h2>Outbox · review before sending</h2>
         <div className="actions">
-          <button className="btn btn-sm btn-primary" disabled={!sel.size || pending} onClick={() => confirm(`Confirm ${sel.size} message(s) for sending?${provider.enabled ? "" : `\n\nNo mail provider is active (${provider.reason}). They will be marked BLOCKED, not sent.`}`) && run(confirmMessagesAction([...sel])).then((r) => { if (r) { alert(r.queued ? `${r.queued} queued for delivery.` : `${r.blocked} blocked: ${r.providerReason}`); setSel(new Set()); router.refresh(); } })}>Confirm & send ({sel.size})</button>
+          <button className="btn btn-sm btn-primary" disabled={!sel.size || pending} onClick={async () => (await confirmDialog(`Confirm ${sel.size} message(s) for sending?${provider.enabled ? "" : `\n\nNo mail provider is active (${provider.reason}). They will be marked BLOCKED, not sent.`}`)) && run(confirmMessagesAction([...sel])).then(async (r) => { if (r) { (await alertDialog(r.queued ? `${r.queued} queued for delivery.` : `${r.blocked} blocked: ${r.providerReason}`)); setSel(new Set()); router.refresh(); } })}>Confirm & send ({sel.size})</button>
           <button className="btn btn-sm" disabled={!sel.size || pending} onClick={() => run(cancelMessagesAction([...sel]), "Cancelled").then((r) => { if (r !== undefined) { setSel(new Set()); router.refresh(); } })}>Cancel</button>
         </div>
       </div>
@@ -115,7 +116,7 @@ export function QueueControls({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter();
   const { run, pending } = useRun();
   if (!isAdmin) return null;
-  return <button className="btn" disabled={pending} onClick={() => run(runQueueAction()).then((r) => { if (r) { alert(`Processed: ${r.claimed} claimed, ${r.done} done, ${r.retried} retried, ${r.dead} dead-lettered, ${r.skipped} skipped.`); router.refresh(); } })}>Run queue now</button>;
+  return <button className="btn" disabled={pending} onClick={() => run(runQueueAction()).then(async (r) => { if (r) { (await alertDialog(`Processed: ${r.claimed} claimed, ${r.done} done, ${r.retried} retried, ${r.dead} dead-lettered, ${r.skipped} skipped.`)); router.refresh(); } })}>Run queue now</button>;
 }
 
 export function RetryButton({ id }: { id: string }) {

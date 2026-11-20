@@ -42,13 +42,15 @@ export function ComponentInspector({ comp, page, config, meta, onChange, tab }: 
       <Field label="Width" htmlFor={id("w")}>
         <select id={id("w")} className="bd-input" value={comp.w} onChange={(e) => onChange({ ...comp, w: Number(e.target.value) })}>{[3, 4, 6, 8, 9, 12].map((n) => <option key={n} value={n}>{n === 12 ? "Full width" : `${n} of 12 columns (${Math.round((n / 12) * 100)}%)`}</option>)}</select>
       </Field>
-      {["heading", "kpi", "chart", "table", "kanban", "activity", "form"].includes(comp.type) && <Field label="Title" htmlFor={id("t")}><input id={id("t")} className="bd-input" value={p.title ?? ""} onChange={(e) => set({ title: e.target.value })} /></Field>}
-      {["heading", "chart", "table", "kanban", "form"].includes(comp.type) && <Field label="Subtitle" htmlFor={id("st")}><input id={id("st")} className="bd-input" value={p.subtitle ?? ""} onChange={(e) => set({ subtitle: e.target.value })} /></Field>}
+      {["heading", "kpi", "chart", "table", "kanban", "activity", "form", "calendar", "gallery", "progress"].includes(comp.type) && <Field label="Title" htmlFor={id("t")}><input id={id("t")} className="bd-input" value={p.title ?? ""} onChange={(e) => set({ title: e.target.value })} /></Field>}
+      {["heading", "chart", "table", "kanban", "form", "calendar", "gallery", "progress"].includes(comp.type) && <Field label="Subtitle" htmlFor={id("st")}><input id={id("st")} className="bd-input" value={p.subtitle ?? ""} onChange={(e) => set({ subtitle: e.target.value })} /></Field>}
       {comp.type === "text" && <Field label="Text" htmlFor={id("tx")}><textarea id={id("tx")} className="bd-input" rows={5} value={p.text ?? ""} onChange={(e) => set({ text: e.target.value })} /></Field>}
       {comp.type === "kpi" && <>
         <Field label="Icon" htmlFor={id("ic")}><select id={id("ic")} className="bd-input" value={p.icon ?? "layers"} onChange={(e) => set({ icon: e.target.value })}>{Object.keys(KPI_ICONS).map((k) => <option key={k} value={k}>{k}</option>)}</select></Field>
       </>}
-      {(comp.type === "kpi" || comp.type === "chart") && <Field label="Number format" htmlFor={id("fm")}><select id={id("fm")} className="bd-input" value={p.format ?? "number"} onChange={(e) => set({ format: e.target.value as Component["props"]["format"] })}><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option><option value="days">Days</option></select></Field>}
+      {comp.type === "progress" && <Field label="Goal (target value)" htmlFor={id("tg")}><input id={id("tg")} type="number" className="bd-input" value={p.target ?? 100} onChange={(e) => set({ target: Number(e.target.value) })} /></Field>}
+      {comp.type === "table" && <label className="bd-field" style={{ display: "flex", gap: 8 }}><input type="checkbox" checked={p.showSearch !== false} onChange={(e) => set({ showSearch: e.target.checked })} /> Search box and sortable columns</label>}
+      {(comp.type === "kpi" || comp.type === "chart" || comp.type === "progress") && <Field label="Number format" htmlFor={id("fm")}><select id={id("fm")} className="bd-input" value={p.format ?? "number"} onChange={(e) => set({ format: e.target.value as Component["props"]["format"] })}><option value="number">Number</option><option value="currency">Currency</option><option value="percent">Percent</option><option value="days">Days</option></select></Field>}
       {comp.type === "chart" && <Field label="Chart type" htmlFor={id("ct")}><select id={id("ct")} className="bd-input" value={p.chart ?? "bar"} onChange={(e) => set({ chart: e.target.value as "bar" })}><option value="bar">Bar</option><option value="line">Line</option><option value="donut">Donut</option></select></Field>}
       {comp.type === "form" && <>
         <Field label="Submit label" htmlFor={id("sl")}><input id={id("sl")} className="bd-input" value={p.submitLabel ?? ""} onChange={(e) => set({ submitLabel: e.target.value })} /></Field>
@@ -91,7 +93,7 @@ export function ComponentInspector({ comp, page, config, meta, onChange, tab }: 
             <select aria-label="Direction" className="bd-input" style={{ width: 90 }} value={p.data?.sortDir ?? "asc"} onChange={(e) => setData({ sortDir: e.target.value as "asc" })}><option value="asc">Asc</option><option value="desc">Desc</option></select>
           </div>
         </Field>
-        {(comp.type === "kpi" || comp.type === "chart") && <Field label="Aggregation" htmlFor={id("ag")}>
+        {(comp.type === "kpi" || comp.type === "chart" || comp.type === "progress") && <Field label="Aggregation" htmlFor={id("ag")}>
           <div style={{ display: "flex", gap: 6 }}>
             <select id={id("ag")} className="bd-input" value={p.agg ?? "count"} onChange={(e) => set({ agg: e.target.value as "count" })}><option value="count">Count</option><option value="sum">Sum</option><option value="avg">Average</option><option value="min">Min</option><option value="max">Max</option></select>
             {p.agg && p.agg !== "count" && <select aria-label="Of field" className="bd-input" value={p.fieldId ?? ""} onChange={(e) => set({ fieldId: e.target.value })}><option value="">Of…</option>{numeric.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>}
@@ -108,7 +110,9 @@ export function ComponentInspector({ comp, page, config, meta, onChange, tab }: 
           <Field label="Title field" htmlFor={id("tf")}><select id={id("tf")} className="bd-input" value={p.titleFieldId ?? ""} onChange={(e) => set({ titleFieldId: e.target.value || undefined })}><option value="">Primary field</option>{fields.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>
           <Field label="Subtitle field" htmlFor={id("sf")}><select id={id("sf")} className="bd-input" value={p.subtitleFieldId ?? ""} onChange={(e) => set({ subtitleFieldId: e.target.value || undefined })}><option value="">None</option>{fields.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>
         </>}
-        {["table", "kanban", "form"].includes(comp.type) && <Field label={comp.type === "form" ? "Form fields (in order)" : "Fields shown"}>
+        {comp.type === "calendar" && <Field label="Date field" htmlFor={id("df")}><select id={id("df")} className="bd-input" value={p.dateFieldId ?? ""} onChange={(e) => set({ dateFieldId: e.target.value || undefined })}><option value="">Choose…</option>{fields.filter((f) => ["date", "dateTime", "createdTime", "lastModifiedTime", "formula", "lookup"].includes(f.type)).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>}
+        {comp.type === "gallery" && <Field label="Cover image (attachment field)" htmlFor={id("im")}><select id={id("im")} className="bd-input" value={p.imageFieldId ?? ""} onChange={(e) => set({ imageFieldId: e.target.value || undefined })}><option value="">None</option>{fields.filter((f) => f.type === "attachment").map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select></Field>}
+        {["table", "kanban", "form", "gallery", "calendar"].includes(comp.type) && <Field label={comp.type === "form" ? "Form fields (in order)" : "Fields shown"}>
           <div className="bd-chips">{fields.filter((f) => comp.type !== "form" || !["lookup", "rollup", "count", "formula", "autonumber", "createdTime", "lastModifiedTime", "createdBy", "lastModifiedBy", "link", "user", "attachment", "button", "aiText"].includes(f.type)).map((f) => { const on = p.fieldIds?.includes(f.id); return <button key={f.id} type="button" className={`bd-chip ${on ? "on" : ""}`} aria-pressed={on} onClick={() => set({ fieldIds: on ? p.fieldIds!.filter((x) => x !== f.id) : [...(p.fieldIds ?? []), f.id] })}>{f.name}</button>; })}</div>
         </Field>}
         {comp.type === "form" && (p.fieldIds?.length ?? 0) > 0 && <Field label="Required & conditional">
@@ -123,7 +127,7 @@ export function ComponentInspector({ comp, page, config, meta, onChange, tab }: 
             </div>
           ); })}
         </Field>}
-        {["table", "kanban", "activity"].includes(comp.type) && <>
+        {["table", "kanban", "activity", "gallery", "calendar"].includes(comp.type) && <>
           <Field label="Rows shown" htmlFor={id("lm")}><input id={id("lm")} type="number" min={1} max={200} className="bd-input" value={p.limit ?? 25} onChange={(e) => set({ limit: Number(e.target.value) })} /></Field>
           <Field label="Clicking a row opens" htmlFor={id("dp")}><select id={id("dp")} className="bd-input" value={p.detailPageId ?? ""} onChange={(e) => set({ detailPageId: e.target.value || undefined })}><option value="">Nothing</option>{detailPages.map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}</select>{!detailPages.length && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Add a detail page for this table in Pages.</span>}</Field>
         </>}

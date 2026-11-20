@@ -6,6 +6,7 @@ import { humanize } from "@/lib/format";
 import { archiveTemplateAction, createFromTemplateAction } from "@/app/actions";
 import { useRun } from "./client";
 import { Icon } from "./icons";
+import { confirmDialog } from "@/components/ui/dialogs";
 
 type T = { id: string; source: "built-in" | "organisation"; blueprint: Blueprint };
 
@@ -52,7 +53,7 @@ export function TemplateWizard({ templates, canManage }: { templates: T[]; canMa
                         {t.blueprint.runningOrder.length > 0 && <span className="badge plain">{t.blueprint.runningOrder.length} {t.blueprint.terms.items.toLowerCase()}</span>}
                       </div>
                     </button>
-                    {src === "organisation" && canManage && <div style={{ padding: "0 16px 12px" }}><button className="btn btn-quiet btn-sm btn-danger" onClick={() => confirm(`Remove template “${t.blueprint.name}”?`) && run(archiveTemplateAction(t.id.slice(4)), "Template removed").then((r) => r !== undefined && router.refresh())}>Remove</button></div>}
+                    {src === "organisation" && canManage && <div style={{ padding: "0 16px 12px" }}><button className="btn btn-quiet btn-sm btn-danger" onClick={async () => (await confirmDialog(`Remove template “${t.blueprint.name}”?`, { danger: true, confirmLabel: "Remove" })) && run(archiveTemplateAction(t.id.slice(4)), "Template removed").then((r) => r !== undefined && router.refresh())}>Remove</button></div>}
                   </div>
                 ))}
               </div>
