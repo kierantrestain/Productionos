@@ -137,7 +137,7 @@ function KanbanComp({ comp, data, rc }: { comp: Component; data?: ComponentData;
   return (
     <Card title={p.title} subtitle={p.subtitle}>
       {err && <div className="ap-error" role="alert">{err}</div>}
-      <div className="ap-kanban">
+      <div className="ap-kanban" tabIndex={0} role="region" aria-label={`${p.title ?? "Board"} columns`}>
         {choices.map((ch) => {
           const items = live.filter((r) => r.values[g.id] === ch.id);
           return (

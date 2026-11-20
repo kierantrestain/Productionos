@@ -150,7 +150,7 @@ function WidgetDialog({ meta, initial, onClose, onSave }: { meta: BaseMeta; init
 
 function useTip() {
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
-  const on = (text: string) => ({ onMouseMove: (e: React.MouseEvent) => setTip({ x: e.clientX + 12, y: e.clientY + 12, text }), onMouseLeave: () => setTip(null), onFocus: (e: React.FocusEvent) => { const r = (e.target as Element).getBoundingClientRect(); setTip({ x: r.right + 6, y: r.top, text }); }, onBlur: () => setTip(null), tabIndex: 0, "aria-label": text });
+  const on = (text: string) => ({ onMouseMove: (e: React.MouseEvent) => setTip({ x: e.clientX + 12, y: e.clientY + 12, text }), onMouseLeave: () => setTip(null), onFocus: (e: React.FocusEvent) => { const r = (e.target as Element).getBoundingClientRect(); setTip({ x: r.right + 6, y: r.top, text }); }, onBlur: () => setTip(null), tabIndex: 0, role: "img", "aria-label": text });
   const node = tip ? <div className="if-tip" role="tooltip" style={{ left: tip.x, top: tip.y }}>{tip.text}</div> : null;
   return { on, node };
 }

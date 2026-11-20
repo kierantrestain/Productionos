@@ -160,15 +160,15 @@ export function BaseApp({ data }: { data: BaseData }) {
       <BaseHeader base={data.base} role={data.role} active="data" nameSlot={data.can.schema
         ? <input className="p-name" aria-label="Base name" defaultValue={data.base.name} onBlur={async (e) => { const n = e.target.value.trim(); if (n && n !== data.base.name) { const r = await updateBaseAction(data.base.id, { name: n }); if (!r.ok) notify(r.error); } }} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} style={{ width: `${Math.max(8, data.base.name.length + 2)}ch` }} />
         : undefined} />
-      <nav className="p-tables" role="tablist" aria-label="Tables" style={{ background: HEAD_BG[data.base.color] ?? HEAD_BG.blue }}>
+      <nav className="p-tables" aria-label="Tables" style={{ background: HEAD_BG[data.base.color] ?? HEAD_BG.blue }}>
         {data.tables.map((t) => t.id === data.table.id && data.can.schema ? (
           <DropdownMenu key={t.id} menuWidth={200} items={[
             { label: "Rename table", onClick: async () => { const n = prompt("Table name", t.name); if (n?.trim()) { const r = await updateTableAction(t.id, { name: n.trim() }); if (!r.ok) notify(r.error); else router.refresh(); } } },
             { label: "Edit table permissions", onClick: () => setConfirm({ title: "Table permissions", body: "perm", run: async () => {} }) },
             ...(data.tables.length > 1 ? [{ type: "divider" as const }, { label: "Delete table", variant: "destructive" as const, onClick: () => setConfirm({ title: `Delete table “${t.name}”?`, body: "All its records, views and fields are archived, and link fields pointing to it from other tables are removed.", run: async () => { const r = await archiveTableAction(t.id); if (!r.ok) notify(r.error); else { router.push(`/base/${data.base.id}`); router.refresh(); } } }) }] : []),
-          ]} renderTrigger={(tp) => <button type="button" {...tp} role="tab" aria-selected="true" className="p-tabletab">{t.name}<ChevronDown size={13} /></button>} />
+          ]} renderTrigger={(tp) => <button type="button" {...tp} aria-current="page" className="p-tabletab">{t.name}<ChevronDown size={13} /></button>} />
         ) : (
-          <button key={t.id} type="button" role="tab" aria-selected={t.id === data.table.id} className="p-tabletab" onClick={() => go(t.id)}>{t.name}</button>
+          <button key={t.id} type="button" aria-current={t.id === data.table.id ? "page" : undefined} className="p-tabletab" onClick={() => go(t.id)}>{t.name}</button>
         ))}
         {data.can.schema && (
           <DropdownMenu menuWidth={220} items={[

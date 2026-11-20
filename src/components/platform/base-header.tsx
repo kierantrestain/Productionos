@@ -18,7 +18,7 @@ export function BaseHeader({ base, role, active, nameSlot }: { base: { id: strin
         {tabs.map(([k, label, href]) => <Link key={k} href={href} className="p-headtab" aria-current={k === active ? "page" : undefined}>{label}</Link>)}
       </nav>
       <span style={{ flex: 1 }} />
-      <span className="chip" style={{ background: "rgba(255,255,255,.18)", color: "#fff" }} title="Your access to this base">{role}{role === "commenter" || role === "reader" ? " · free seat" : ""}</span>
+      <span className="chip" style={{ background: "rgba(0,0,0,.32)", color: "#fff" }} title="Your access to this base">{role}{role === "commenter" || role === "reader" ? " · free seat" : ""}</span>
     </header>
   );
 }

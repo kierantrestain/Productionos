@@ -24,7 +24,7 @@
 .p-tables { display: flex; align-items: flex-end; gap: 2px; padding: 0 8px; height: 34px; flex: none; overflow-x: auto; scrollbar-width: none; }
 .p-tabletab { display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 30px; border-radius: 6px 6px 0 0; color: rgba(255,255,255,.92); font-weight: 600; font-size: 13px; white-space: nowrap; cursor: pointer; border: 0; background: transparent; }
 .p-tabletab:hover { background: rgba(0,0,0,.12); }
-.p-tabletab[aria-selected="true"] { background: var(--color-background-surface); color: var(--color-text-primary); }
+.p-tabletab[aria-current="page"], .p-tabletab[aria-selected="true"] { background: var(--color-background-surface); color: var(--color-text-primary); }
 
 /* ── View chrome ── */
 .p-body { display: flex; flex: 1; min-height: 0; background: var(--color-background-surface); }

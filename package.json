@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@astryxdesign/cli": "0.7.16",
+    "@axe-core/playwright": "^4.14.0",
     "@eslint/eslintrc": "^3.3.7",
     "@playwright/test": "1.63.0",
     "@types/node": "^26.6.6",

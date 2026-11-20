@@ -28,7 +28,7 @@ export function Shell({ nav, user, children, orgs = [], orgId, config = { settin
       <a href="#main" className="sr-only">Skip to content</a>
       <div className="shell" data-nav-open={open}>
         <aside className="sidebar" aria-label="Primary">
-          <div className="brand"><span className="brand-mark">B</span><div>Production OS<small>{user.orgName}</small></div></div>
+          <Link href="/" className="brand" style={{ color: "inherit", textDecoration: "none" }}><span className="brand-mark">B</span><div>Bang On OS<small>Production Suite · {user.orgName}</small></div></Link>
           <nav className="nav">
             {sections.map((s) => (
               <div key={s} style={{ display: "contents" }}>

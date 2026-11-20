@@ -36,7 +36,7 @@ test.describe.serial("base platform", () => {
     await expect(p.getByText("Looks good")).toBeVisible();
     await p.keyboard.press("Escape");
     // Kanban view of tasks.
-    await p.getByRole("tab", { name: "Tasks" }).click();
+    await p.locator(".p-tables").getByRole("button", { name: "Tasks" }).click();
     await p.locator(".p-views a.p-viewitem", { hasText: "By priority" }).click();
     await expect(p.locator("section.k-col").first()).toBeVisible();
     // Export Excel from the grid.

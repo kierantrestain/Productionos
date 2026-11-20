@@ -180,8 +180,9 @@ export function Builder({ app, initial, meta }: { app: AppInfo; initial: AppConf
         </aside>
 
         <main className="bd-canvas-wrap" onClick={() => setSel(null)}>
-          <div className="bd-pages" role="tablist" aria-label="Pages">
+          <div className="bd-pages"><div role="tablist" aria-label="Pages" style={{ display: "contents" }}>
             {config.pages.filter((p) => !p.hidden || p.kind === "detail" || p.id === page?.id).map((p) => { const I = PAGE_ICONS[p.icon ?? "dashboard"] ?? FileText; return <button key={p.id} type="button" role="tab" className="bd-pagetab" aria-selected={p.id === page?.id} onClick={(e) => { e.stopPropagation(); setPageId(p.id); setSel(null); }}><I size={15} />{p.title}</button>; })}
+            </div>
             <button type="button" className="bd-pagetab" aria-label="Add page" onClick={(e) => { e.stopPropagation(); addPage("dashboard"); }}><Plus size={15} /></button>
           </div>
           {page?.kind === "detail" && (

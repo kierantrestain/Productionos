@@ -8,56 +8,39 @@
  * dense accessible data display). Accent = studio "tally" red-orange, used only for live/actionable states.
  */
 :root {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-family-body, "Inter"), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  --bg: #f6f5f3;
-  --surface: #ffffff;
-  --surface-2: #faf9f7;
-  --surface-sunken: #efede9;
-  --border: #e3e0da;
-  --border-strong: #cfcac1;
-  --text: #1c1b19;
-  --text-2: #57534c;
-  --text-3: #8a857c;
-  --accent: #e5482b;
-  --accent-hover: #c93a20;
-  --accent-soft: #fdece8;
+  /* Legacy Production Suite tokens now resolve to the one Bang On Astryx theme (light & dark via light-dark()). */
+  --bg: var(--color-background-body);
+  --surface: var(--color-background-card);
+  --surface-2: var(--color-background-surface);
+  --surface-sunken: var(--color-background-muted);
+  --border: var(--color-border);
+  --border-strong: var(--color-border-emphasized);
+  --text: var(--color-text-primary);
+  --text-2: var(--color-text-secondary);
+  --text-3: var(--color-text-secondary);
+  --accent: var(--color-accent);
+  --accent-hover: color-mix(in srgb, var(--color-accent) 85%, #000);
+  --accent-soft: var(--color-background-blue);
   --accent-text: #ffffff;
-  --focus: #2563eb;
-  --ok: #1f7a4d; --ok-soft: #e4f4ea;
-  --warn: #9a6100; --warn-soft: #fdf2d8;
-  --bad: #b42318; --bad-soft: #fde7e5;
-  --info: #24589c; --info-soft: #e5eefa;
-  --neutral-soft: #eeece8;
-  --shadow-1: 0 1px 2px rgba(28, 27, 25, .06);
-  --shadow-2: 0 8px 28px rgba(28, 27, 25, .14);
+  --focus: var(--color-accent);
+  --ok: var(--color-text-green); --ok-soft: var(--color-background-green);
+  --warn: var(--color-text-orange); --warn-soft: var(--color-background-yellow);
+  --bad: var(--color-text-red); --bad-soft: var(--color-background-red);
+  --info: var(--color-text-blue); --info-soft: var(--color-background-blue);
+  --neutral-soft: var(--color-background-muted);
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, .06);
+  --shadow-2: 0 8px 28px rgba(16, 24, 40, .14);
   --radius-s: 6px; --radius-m: 8px; --radius-l: 12px;
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   --sidebar: 232px;
   --row-h: 36px;
-  color-scheme: light;
+  color-scheme: light dark;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141412; --surface: #1c1b19; --surface-2: #211f1d; --surface-sunken: #11100f;
-    --border: #2e2c29; --border-strong: #423f3a; --text: #f1efeb; --text-2: #b8b3aa; --text-3: #847f76;
-    --accent: #ff6a4a; --accent-hover: #ff8468; --accent-soft: #3a1d16; --accent-text: #160a06;
-    --ok: #5fcf93; --ok-soft: #12291d; --warn: #f0b546; --warn-soft: #2e230e; --bad: #ff7b6e; --bad-soft: #33150f;
-    --info: #79aaf0; --info-soft: #14233a; --neutral-soft: #2a2825; --focus: #79aaf0;
-    --shadow-2: 0 8px 28px rgba(0, 0, 0, .5);
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #141412; --surface: #1c1b19; --surface-2: #211f1d; --surface-sunken: #11100f;
-  --border: #2e2c29; --border-strong: #423f3a; --text: #f1efeb; --text-2: #b8b3aa; --text-3: #847f76;
-  --accent: #ff6a4a; --accent-hover: #ff8468; --accent-soft: #3a1d16; --accent-text: #160a06;
-  --ok: #5fcf93; --ok-soft: #12291d; --warn: #f0b546; --warn-soft: #2e230e; --bad: #ff7b6e; --bad-soft: #33150f;
-  --info: #79aaf0; --info-soft: #14233a; --neutral-soft: #2a2825; --focus: #79aaf0;
-  color-scheme: dark;
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -149,7 +132,7 @@ p { margin: 0; }
 .tone-warn { background: var(--warn-soft); color: var(--warn); }
 .tone-bad { background: var(--bad-soft); color: var(--bad); }
 .tone-info { background: var(--info-soft); color: var(--info); }
-.tone-live { background: var(--accent-soft); color: var(--accent); }
+.tone-live { background: var(--accent-soft); color: var(--color-text-blue); }
 
 /* ── Panels ── */
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-l); }

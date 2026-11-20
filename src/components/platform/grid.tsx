@@ -250,11 +250,11 @@ export function Grid(p: GridProps) {
   const editorPos = activeItem && activeField && active ? { top: HEAD_H + activeItem.top, left: sticky(active.c) ? scroll.left + NUM_W : lefts[active.c], minWidth: width(activeField) } : null;
 
   return (
-    <div className="g-wrap" ref={wrapRef} tabIndex={0} role="grid" aria-rowcount={rows.length} aria-colcount={fields.length} onKeyDown={onKeyDown}
+    <div className="g-wrap" ref={wrapRef} tabIndex={0} role="region" aria-label="Records — arrow keys move, Enter edits, Space expands" onKeyDown={onKeyDown}
       onScroll={(e) => { const t = e.currentTarget; setScroll({ top: t.scrollTop, left: t.scrollLeft, h: t.clientHeight }); setMenu(null); }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
       {/* Header */}
-      <div className="g-head" style={{ width: totalW }} role="row">
+      <div className="g-head" style={{ width: totalW }}>
         <div className="g-sticky">
           <div className="g-num" style={{ background: "var(--color-background-muted)" }}>
             <input type="checkbox" aria-label="Select all records" checked={allSelected} onChange={() => setSelected(allSelected ? new Set() : new Set(rows.map((r) => r.id)))} />
@@ -278,7 +278,7 @@ export function Grid(p: GridProps) {
         ) : (() => {
           const r = rowItems.indexOf(it); const sel = selected.has(it.row.id);
           return (
-            <div key={it.row.id} className={`g-row ${sel ? "sel" : ""} ${it.row.color ? `rowtint-${it.row.color}` : ""}`} style={{ top: it.top, height: it.h, width: totalW }} role="row" aria-rowindex={it.idx + 1}
+            <div key={it.row.id} className={`g-row ${sel ? "sel" : ""} ${it.row.color ? `rowtint-${it.row.color}` : ""}`} style={{ top: it.top, height: it.h, width: totalW }}
               onContextMenu={(e) => { e.preventDefault(); const b = wrapRef.current!.getBoundingClientRect(); setMenu({ x: e.clientX - b.left + scroll.left, y: e.clientY - b.top + scroll.top, rowId: it.row.id }); }}>
               <div className="g-sticky">
                 <div className="g-num">
@@ -357,7 +357,7 @@ export function Grid(p: GridProps) {
 
 function HeaderCell({ f, w, items, onResize, sort, draggable, onDragStart, onDrop }: { f: ClientField; w: number; items: MenuItems; onResize: (f: ClientField, e: React.PointerEvent) => void; sort?: string; draggable?: boolean; onDragStart?: () => void; onDrop?: () => void }) {
   return (
-    <div className="g-hcell" style={{ width: w }} role="columnheader" title={f.description ?? f.name} draggable={draggable} onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div className="g-hcell" style={{ width: w }} title={f.description ?? f.name} draggable={draggable} onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <span className="ic"><FieldIcon type={f.type} /></span>
       <span className="nm">{f.name}</span>
       {!f.editable && !isComputed(f.type) && <Lock size={11} aria-label="Read-only for you" />}
@@ -372,7 +372,7 @@ function Cell({ f, row, w, wrap, active, inRange, readonly, onClick, onDouble, e
   const right = NUMERIC.has(f.type) || ((f.type === "rollup" || f.type === "formula") && typeof row.values[f.id] === "number");
   return (
     <div className={`g-cell ${wrap ? "wrap" : ""} ${f.isPrimary ? "primary" : ""} ${active ? "active" : ""} ${inRange && !active ? "inrange" : ""} ${readonly ? "readonly" : ""}`}
-      style={{ width: w, justifyContent: right ? "flex-end" : undefined }} role="gridcell" aria-selected={active} onMouseDown={onClick} onDoubleClick={onDouble}>
+      style={{ width: w, justifyContent: right ? "flex-end" : undefined }} aria-current={active ? "true" : undefined} onMouseDown={onClick} onDoubleClick={onDouble}>
       <CellView f={f} v={row.values[f.id]} />
       {active && extra}
     </div>
