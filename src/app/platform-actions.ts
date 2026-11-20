@@ -28,7 +28,7 @@ export async function createBaseFromTemplateAction(key: string, name?: string) {
     const r = await createBaseFromSpec(ctx, spec); done(); return { id: r.baseId };
   });
 }
-export async function updateBaseAction(baseId: string, patch: { name?: string; icon?: string; color?: string; description?: string | null }) {
+export async function updateBaseAction(baseId: string, patch: { name?: string; icon?: string; color?: string; description?: string | null; visibility?: "workspace" | "private" }) {
   return toResult(async () => { await S.updateBase(await requireContext(), baseId, patch); done(); });
 }
 export async function archiveBaseAction(baseId: string) {
@@ -50,6 +50,9 @@ export async function createFieldAction(tableId: string, input: { name: string; 
 }
 export async function updateFieldAction(fieldId: string, patch: Parameters<typeof S.updateField>[2]) {
   return toResult(async () => { await S.updateField(await requireContext(), fieldId, patch); done(); });
+}
+export async function previewFieldChangeAction(fieldId: string, patch: { type?: FieldType; options?: FieldOptions }) {
+  return toResult(async () => S.previewFieldChange(await requireContext(), fieldId, patch));
 }
 export async function archiveFieldAction(fieldId: string) {
   return toResult(async () => { await S.archiveField(await requireContext(), fieldId); done(); });
@@ -86,7 +89,7 @@ export async function loadViewAction(viewId: string, search?: string) {
 export async function createRecordsAction(tableId: string, rows: Record<string, unknown>[], afterRecordId?: string) {
   return toResult(async () => { const ctx = await requireContext(); const ids = await R.createRecords(ctx, tableId, rows, { afterRecordId }); await kickOutbox(ctx.orgId); return ids; });
 }
-export async function updateCellsAction(cells: { recordId: string; fieldId: string; value: unknown }[]) {
+export async function updateCellsAction(cells: { recordId: string; fieldId: string; value: unknown; expected?: unknown }[]) {
   return toResult(async () => { const ctx = await requireContext(); const n = await R.updateCells(ctx, cells); await kickOutbox(ctx.orgId); return n; });
 }
 export async function updateRecordAction(recordId: string, patch: Record<string, unknown>) {
@@ -115,6 +118,9 @@ export async function recordDetailAction(tableId: string, recordId: string) {
 }
 export async function addCommentAction(recordId: string, body: string) {
   return toResult(async () => { const c = await R.addComment(await requireContext(), recordId, body); return { id: c.id }; });
+}
+export async function clickButtonAction(fieldId: string, recordId: string) {
+  return toResult(async () => { const ctx = await requireContext(); const { clickButton } = await import("@/server/platform/buttons"); const r = await clickButton(ctx, fieldId, recordId); await kickOutbox(ctx.orgId); return r; });
 }
 export async function deleteCommentAction(id: string) {
   return toResult(async () => R.deleteComment(await requireContext(), id));
@@ -213,6 +219,9 @@ export async function saveAutomationAction(baseId: string, input: Parameters<typ
 }
 export async function deleteAutomationAction(id: string) {
   return toResult(async () => { const { deleteAutomation } = await import("@/server/platform/automations"); await deleteAutomation(await requireContext(), id); done(); });
+}
+export async function listAutomationsAction(baseId: string) {
+  return toResult(async () => { const { listAutomations } = await import("@/server/platform/automations"); return (await listAutomations(await requireContext(), baseId)).map((a) => ({ id: a.id, name: a.name, isEnabled: a.isEnabled })); });
 }
 export async function automationRunsAction(id: string) {
   return toResult(async () => { const { automationRuns } = await import("@/server/platform/automations"); const r = await automationRuns(await requireContext(), id); return r.map((x) => ({ id: x.id, status: x.status, result: x.result, error: x.lastError, at: x.startedAt.toISOString() })); });

@@ -266,3 +266,20 @@ export async function previewAutomation(ctx: Ctx, baseId: string, input: { trigg
   await executeSteps(ctx, fake, input.trigger.tableId, recordId, input.actions, 0, true, log);
   return { matches, steps: log };
 }
+
+/**
+ * Run one automation's steps for one record on demand (button fields). The caller must be able to edit
+ * records in the automation's table; steps still run as the automation owner, idempotent per click.
+ */
+export async function runAutomationForRecord(ctx: Ctx, automationId: string, recordId: string, clickId: string) {
+  const [a] = await db.select().from(baseAutomations).where(and(eq(baseAutomations.id, automationId), eq(baseAutomations.orgId, ctx.orgId), isNull(baseAutomations.archivedAt))).limit(1);
+  if (!a) throw notFound("Automation not found.");
+  if (!a.isEnabled) throw invalid("That automation is turned off.");
+  const t = a.trigger as unknown as Trigger;
+  const [table] = await db.select().from(baseTables).where(eq(baseTables.id, t.tableId)).limit(1);
+  if (!table || table.baseId !== a.baseId) throw notFound("Automation not found.");
+  requireRole(await baseAccess(ctx, a.baseId), table.permissions?.edit ?? "editor", "run automations on this table");
+  const res = await runOne(a, `auto:${a.id}:button:${recordId}:${clickId}`, t.tableId, recordId, 0);
+  await audit(db, ctx, "run_automation", "base_automations", a.id, { meta: { recordId, status: res.status } });
+  return res;
+}

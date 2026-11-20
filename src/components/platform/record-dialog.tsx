@@ -4,7 +4,7 @@ import { Dialog } from "@astryxdesign/core/Dialog";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { ChevronUp, ChevronDown, X, Trash2, MessageSquare, History, Lock, Sparkles } from "lucide-react";
 import { isComputed } from "@/lib/platform/fields";
-import { addCommentAction, deleteCommentAction, recordDetailAction } from "@/app/platform-actions";
+import { addCommentAction, clickButtonAction, deleteCommentAction, recordDetailAction } from "@/app/platform-actions";
 import { CellEditor, CellView } from "./cells";
 import { FieldIcon } from "./icons";
 import type { BaseData, ClientField, ClientRow } from "./types";
@@ -43,8 +43,14 @@ export function RecordDialog({ data, recordId, ids, onNavigate, onClose, onEdit,
   const primary = data.allFields.find((f) => f.isPrimary);
   const title = row && primary ? (String(row.values[primary.id] ?? "") || "Unnamed record") : "…";
   const fieldName = (id?: string | null) => data.allFields.find((f) => f.id === id)?.name ?? "A field";
-  const canEditField = (f: ClientField) => data.can.edit && f.editable && !isComputed(f.type) && f.type !== "attachment";
+  const canEditField = (f: ClientField) => data.can.edit && f.editable && !isComputed(f.type);
 
+  const press = async (f: ClientField) => {
+    setErr("");
+    const r = await clickButtonAction(f.id, recordId);
+    if (!r.ok) { setErr(r.error); return; }
+    if (r.data.url) window.open(r.data.url, "_blank", "noopener,noreferrer"); else load();
+  };
   const commit = async (f: ClientField, v: unknown) => {
     setEditing(null);
     const before = row?.values[f.id] ?? null;
@@ -78,11 +84,11 @@ export function RecordDialog({ data, recordId, ids, onNavigate, onClose, onEdit,
                 {f.description && <div style={{ fontSize: 12, color: "var(--color-text-secondary)", marginBottom: 4 }}>{f.description}</div>}
                 {editing === f.id ? (
                   <div className="g-editor" style={{ position: "relative" }}>
-                    <CellEditor f={f} value={row.values[f.id]} collaborators={data.collaborators} canSchema={data.can.schema} onCancel={() => setEditing(null)} onCommit={(v) => commit(f, v)} />
+                    <CellEditor f={f} value={row.values[f.id]} collaborators={data.collaborators} canSchema={data.can.schema} recordId={recordId} onRefresh={load} onCancel={() => setEditing(null)} onCommit={(v) => commit(f, v)} />
                   </div>
                 ) : (
-                  <div role={canEditField(f) ? "button" : undefined} tabIndex={canEditField(f) ? 0 : -1}
-                    onClick={() => { if (!canEditField(f)) return; if (f.type === "checkbox") commit(f, !row.values[f.id]); else setEditing(f.id); }}
+                  <div role={canEditField(f) || f.type === "button" ? "button" : undefined} tabIndex={canEditField(f) || f.type === "button" ? 0 : -1}
+                    onClick={() => { if (f.type === "button") { press(f); return; } if (!canEditField(f)) return; if (f.type === "checkbox") commit(f, !row.values[f.id]); else setEditing(f.id); }}
                     onKeyDown={(e) => { if (e.key === "Enter" && canEditField(f)) setEditing(f.id); }}
                     style={{ minHeight: 34, padding: "6px 10px", border: "1px solid var(--color-border)", borderRadius: 6, background: isComputed(f.type) || !canEditField(f) ? "var(--color-background-muted)" : "var(--color-background-surface)", cursor: canEditField(f) ? "text" : "default", whiteSpace: f.type === "longText" || f.type === "aiText" ? "pre-wrap" : undefined, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
                     <CellView f={f} v={row.values[f.id]} />

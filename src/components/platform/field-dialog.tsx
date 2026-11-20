@@ -1,11 +1,11 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog } from "@astryxdesign/core/Dialog";
 import { Button } from "@astryxdesign/core/Button";
 import { Trash2, Plus } from "lucide-react";
 import { COLORS, FIELD_META, FIELD_TYPES, ROLLUP_FNS, newChoiceId, type FieldOptions, type FieldType, type SelectChoice } from "@/lib/platform/fields";
 import { FUNCTION_NAMES, toDisplay } from "@/lib/platform/formula";
-import { createFieldAction, updateFieldAction } from "@/app/platform-actions";
+import { createFieldAction, listAutomationsAction, previewFieldChangeAction, updateFieldAction } from "@/app/platform-actions";
 import { FieldIcon } from "./icons";
 import type { BaseData, ClientField } from "./types";
 
@@ -36,10 +36,19 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved }: { d
   const choices = o.choices ?? [];
   const setChoices = (c: SelectChoice[]) => set({ choices: c });
 
+  const [impact, setImpact] = useState<{ converted: number; cleared: number; unchanged: number; empty: number; addedChoices: string[]; examples: { before: string; after: string }[] } | null>(null);
+  const removedChoices = editing && (field!.type === "singleSelect" || field!.type === "multipleSelects") && (field!.options.choices ?? []).some((c) => !choices.some((x) => x.id === c.id));
+  const risky = editing && (type !== field!.type || removedChoices);
   const save = async () => {
     setErr("");
     const options: FieldOptions = { ...o };
     if (type === "singleSelect" || type === "multipleSelects") options.choices = choices.filter((c) => c.name.trim());
+    if (risky && !impact) {
+      // Show what will happen to existing values before changing anything.
+      const p = await previewFieldChangeAction(field!.id, { ...(type !== field!.type ? { type } : {}), options });
+      if (!p.ok) { setErr(p.error); return; }
+      if (p.data.converted || p.data.cleared || p.data.addedChoices.length) { setImpact(p.data); return; }
+    }
     const permissions = { ...(perm.edit ? { edit: perm.edit } : {}), ...(perm.hiddenBelow ? { hiddenBelow: perm.hiddenBelow } : {}) };
     const r = editing
       ? await updateFieldAction(field!.id, { name, ...(type !== field!.type ? { type } : {}), options, description: description || null, ...(data.can.schema ? { permissions } : {}) })
@@ -131,12 +140,7 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved }: { d
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Reference fields with {"{Field name}"}. Text is generated on request per record (sparkle button, or the field menu → Generate). {data.aiConfigured ? "" : "AI isn't configured for this workspace yet."}</p>
         </>
       )}
-      {type === "button" && (
-        <div style={{ display: "flex", gap: 10 }}>
-          <div style={{ flex: 1 }}><label style={lbl} htmlFor="fd-bl">Label</label><input id="fd-bl" style={inp} value={o.label ?? ""} onChange={(e) => set({ label: e.target.value })} /></div>
-          <div style={{ flex: 2 }}><label style={lbl} htmlFor="fd-bu">Open URL ({"{RECORD_ID}"} allowed)</label><input id="fd-bu" style={inp} value={o.url ?? ""} onChange={(e) => set({ url: e.target.value })} placeholder="https://…" /></div>
-        </div>
-      )}
+      {type === "button" && <ButtonConfig data={data} o={o} set={set} />}
 
       <label style={lbl} htmlFor="fd-desc">Description</label>
       <input id="fd-desc" style={inp} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Help collaborators fill this in" />
@@ -151,12 +155,70 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved }: { d
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 6 }}>Enforced on the server — hidden fields are never sent to people below the chosen role, including in exports and the API.</p>
         </details>
       )}
+      {impact && (
+        <div role="status" className="p-basecard" style={{ display: "block", marginTop: 14, borderColor: impact.cleared ? "var(--color-text-orange)" : undefined }}>
+          <strong style={{ fontSize: 13 }}>Impact on existing records</strong>
+          <ul style={{ margin: "6px 0 0 18px", fontSize: 13 }}>
+            <li>{impact.converted} value{impact.converted === 1 ? "" : "s"} will be converted</li>
+            {impact.cleared > 0 && <li style={{ color: "var(--color-text-orange)" }}>{impact.cleared} value{impact.cleared === 1 ? "" : "s"} can&apos;t be represented and will be cleared (kept in record history)</li>}
+            <li>{impact.unchanged + impact.empty} unchanged</li>
+            {impact.addedChoices.length > 0 && <li>{impact.addedChoices.length} new option{impact.addedChoices.length === 1 ? "" : "s"}: {impact.addedChoices.slice(0, 8).join(", ")}{impact.addedChoices.length > 8 ? "…" : ""}</li>}
+          </ul>
+          {impact.examples.length > 0 && <table style={{ fontSize: 12, marginTop: 6 }}><tbody>{impact.examples.map((x, i) => <tr key={i}><td style={{ paddingRight: 8, color: "var(--color-text-secondary)" }}>{x.before}</td><td>→ {x.after}</td></tr>)}</tbody></table>}
+          <button type="button" className="p-tbtn" style={{ marginTop: 6 }} onClick={() => setImpact(null)}>Change settings</button>
+        </div>
+      )}
       {err && <p style={{ color: "var(--color-text-error)", marginTop: 12 }}>{err}</p>}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
         <Button label="Cancel" onClick={onClose} />
-        <Button label={editing ? "Save" : "Create field"} variant="primary" clickAction={save} />
+        <Button label={!editing ? "Create field" : impact ? `Convert ${impact.converted + impact.cleared} value${impact.converted + impact.cleared === 1 ? "" : "s"} and save` : "Save"} variant="primary" clickAction={save} />
       </div>
       </div>
     </Dialog>
+  );
+}
+
+/** Button field: label + one action (open a URL, update the record, run an automation). */
+function ButtonConfig({ data, o, set }: { data: BaseData; o: FieldOptions; set: (p: Partial<FieldOptions>) => void }) {
+  const [autos, setAutos] = useState<{ id: string; name: string; isEnabled: boolean }[]>([]);
+  useEffect(() => { listAutomationsAction(data.base.id).then((r) => { if (r.ok) setAutos(r.data); }); }, [data.base.id]);
+  const action = o.action ?? "open_url";
+  const values = o.values ?? {};
+  const writable = data.allFields.filter((f) => !["link", "user", "attachment", "button", "lookup", "rollup", "count", "formula", "autonumber", "createdTime", "lastModifiedTime", "createdBy", "lastModifiedBy"].includes(f.type));
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}><label style={lbl} htmlFor="fd-bl">Label</label><input id="fd-bl" style={inp} value={o.label ?? ""} onChange={(e) => set({ label: e.target.value })} placeholder="e.g. Mark paid" /></div>
+        <div style={{ flex: 1 }}><label style={lbl} htmlFor="fd-ba">When clicked</label>
+          <select id="fd-ba" style={inp} value={action} onChange={(e) => set({ action: e.target.value as FieldOptions["action"] })}>
+            <option value="open_url">Open a URL</option><option value="update_record">Update this record</option><option value="run_automation">Run an automation</option>
+          </select></div>
+      </div>
+      {action === "open_url" && <><label style={lbl} htmlFor="fd-bu">URL — use {"{RECORD_ID}"} or {"{Field name}"}</label><input id="fd-bu" style={inp} value={o.url ?? ""} onChange={(e) => set({ url: e.target.value })} placeholder="https://maps.google.com/?q={Address}" /></>}
+      {action === "update_record" && (
+        <div>
+          <label style={lbl}>Set these values</label>
+          {Object.entries(values).map(([fid, v]) => { const f = data.allFields.find((x) => x.id === fid); return (
+            <div key={fid} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+              <span className="chip" style={{ height: 34, borderRadius: 6, minWidth: 120 }}>{f?.name ?? "?"}</span>
+              {f?.type === "singleSelect" ? <select aria-label={f.name} style={inp} value={String(v ?? "")} onChange={(e) => set({ values: { ...values, [fid]: e.target.value } })}><option value="">(clear)</option>{f.options.choices?.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}</select>
+                : f?.type === "checkbox" ? <select aria-label={f.name} style={inp} value={String(!!v)} onChange={(e) => set({ values: { ...values, [fid]: e.target.value === "true" } })}><option value="true">Checked</option><option value="false">Unchecked</option></select>
+                : <input aria-label={f?.name} style={inp} value={String(v ?? "")} onChange={(e) => set({ values: { ...values, [fid]: e.target.value } })} />}
+              <button type="button" className="p-tbtn" aria-label="Remove" onClick={() => { const n = { ...values }; delete n[fid]; set({ values: n }); }}><Trash2 size={14} /></button>
+            </div>
+          ); })}
+          <select aria-label="Add a field to set" style={{ ...inp, width: "auto" }} value="" onChange={(e) => e.target.value && set({ values: { ...values, [e.target.value]: "" } })}><option value="">+ Set a field…</option>{writable.filter((f) => !(f.id in values)).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+        </div>
+      )}
+      {action === "run_automation" && (
+        <>
+          <label style={lbl} htmlFor="fd-bauto">Automation</label>
+          <select id="fd-bauto" style={inp} value={o.automationId ?? ""} onChange={(e) => set({ automationId: e.target.value || undefined })}>
+            <option value="">Choose…</option>{autos.map((a) => <option key={a.id} value={a.id}>{a.name}{a.isEnabled ? "" : " (off)"}</option>)}
+          </select>
+          <p style={{ fontSize: 12, color: "var(--color-text-secondary)", marginTop: 4 }}>Runs that automation&apos;s steps for the clicked record. The clicker needs edit access to the table; outbound steps still wait for approval.</p>
+        </>
+      )}
+    </>
   );
 }

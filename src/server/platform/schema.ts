@@ -4,13 +4,13 @@
 import { randomBytes } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, type DbOrTx } from "@/db";
-import { baseFields, baseRecords, baseTables, baseViews, bases, type ViewConfig } from "@/db/schema";
+import { baseFields, baseMembers, baseRecords, baseTables, baseViews, bases, type ViewConfig } from "@/db/schema";
 import { COLORS, FIELD_TYPES, coerceValue, displayValue, isComputed, newChoiceId, type FieldDefLite, type FieldOptions, type FieldType, type SelectChoice } from "@/lib/platform/fields";
 import { FormulaError, parse, references, toStored } from "@/lib/platform/formula";
 import type { Ctx } from "../auth/context";
 import { audit } from "../audit";
 import { forbidden, invalid, notFound } from "../errors";
-import { atLeast, baseAccess, rank, requireRole } from "./access";
+import { atLeast, baseAccess, baseRoles, rank, requireRole } from "./access";
 
 type Tx = DbOrTx;
 const now = () => new Date();
@@ -19,9 +19,8 @@ const now = () => new Date();
 
 export async function listBases(ctx: Ctx) {
   const rows = await db.select().from(bases).where(and(eq(bases.orgId, ctx.orgId), isNull(bases.archivedAt))).orderBy(asc(bases.sortOrder), asc(bases.createdAt));
-  const out = [];
-  for (const b of rows) { try { const a = await baseAccess(ctx, b.id); out.push({ ...b, role: a.role }); } catch { /* not visible */ } }
-  return out;
+  const roles = await baseRoles(ctx, rows.map((b) => b.id));
+  return rows.filter((b) => roles.has(b.id)).map((b) => ({ ...b, role: roles.get(b.id)! }));
 }
 
 export async function createBase(ctx: Ctx, input: { name: string; icon?: string; color?: string; description?: string; blank?: boolean }, tx?: Tx) {
@@ -43,9 +42,16 @@ export async function createBase(ctx: Ctx, input: { name: string; icon?: string;
   return tx ? run(tx) : db.transaction(run);
 }
 
-export async function updateBase(ctx: Ctx, baseId: string, patch: { name?: string; icon?: string; color?: string; description?: string | null }) {
+export async function updateBase(ctx: Ctx, baseId: string, patch: { name?: string; icon?: string; color?: string; description?: string | null; visibility?: "workspace" | "private" }) {
   const a = await baseAccess(ctx, baseId); requireRole(a, "creator", "change this base");
   const set: Record<string, unknown> = { updatedAt: now() };
+  if (patch.visibility !== undefined) {
+    if (!["workspace", "private"].includes(patch.visibility)) throw invalid("Unknown visibility.");
+    requireRole(a, "owner", "change who can see this base");
+    set.visibility = patch.visibility;
+    // Going private must not lock out the person doing it: pin their current role explicitly.
+    if (patch.visibility === "private") await db.insert(baseMembers).values({ orgId: ctx.orgId, baseId, userId: ctx.userId, role: a.role }).onConflictDoNothing();
+  }
   if (patch.name !== undefined) { if (!patch.name.trim()) throw invalid("Name the base."); set.name = patch.name.trim().slice(0, 120); }
   if (patch.icon) set.icon = patch.icon.slice(0, 40);
   if (patch.color) { if (!COLORS.includes(patch.color as never)) throw invalid("Unknown colour"); set.color = patch.color; }
@@ -149,6 +155,12 @@ export function normaliseOptions(type: FieldType, o: FieldOptions): FieldOptions
   if (type === "rating") out.max = Math.min(Math.max(o.max ?? 5, 1), 10);
   if (["number", "currency", "percent"].includes(type)) out.precision = Math.min(Math.max(o.precision ?? (type === "currency" ? 2 : 0), 0), 8);
   if (type === "currency") out.symbol = (o.symbol ?? "£").slice(0, 4);
+  if (type === "button") {
+    out.action = ["open_url", "update_record", "run_automation"].includes(o.action ?? "") ? o.action : "open_url";
+    out.label = String(o.label ?? "").slice(0, 60);
+    if (o.url && !/^https?:\/\//i.test(o.url)) throw invalid("Button URLs must start with http:// or https://");
+    out.values = o.values && typeof o.values === "object" && !Array.isArray(o.values) ? Object.fromEntries(Object.entries(o.values).slice(0, 50)) : undefined;
+  }
   return out;
 }
 
@@ -237,32 +249,71 @@ export async function updateField(ctx: Ctx, fieldId: string, patch: { name?: str
     }
     if (patch.options || patch.type) {
       let opts = normaliseOptions(newType, { ...(cur.options as FieldOptions), ...(patch.options ?? {}) });
+      if (newType === "link") {
+        // A link's target table and inverse are fixed at creation (repointing could expose another base's records).
+        const c = cur.options as FieldOptions;
+        opts = { ...opts, linkedTableId: c.linkedTableId, inverseFieldId: c.inverseFieldId };
+      }
       opts = await validateComputed(tx, cur.tableId, newType, opts, fieldId);
       set.options = opts; set.type = newType;
       // Convert stored values when the type changes or select choices are removed.
       if (!isComputed(newType)) {
         const recs = await tx.select({ id: baseRecords.id, data: baseRecords.data }).from(baseRecords).where(and(eq(baseRecords.tableId, cur.tableId), isNull(baseRecords.deletedAt)));
-        const oldLite = asLite(cur); const newLite: FieldDefLite = { ...oldLite, type: newType, options: opts };
-        if ((newType === "singleSelect" || newType === "multipleSelects") && newType !== cur.type) {
-          const names = new Set<string>();
-          for (const r of recs) for (const part of displayValue(oldLite, r.data[fieldId]).split(",").map((s) => s.trim()).filter(Boolean)) names.add(part);
-          const existing = new Set((opts.choices ?? []).map((c) => c.name));
-          opts.choices = [...(opts.choices ?? []), ...[...names].filter((n) => !existing.has(n)).slice(0, 200).map((n, i) => ({ id: newChoiceId(), name: n.slice(0, 100), color: COLORS[((opts.choices?.length ?? 0) + i) % COLORS.length] as SelectChoice["color"] }))];
-          set.options = opts; newLite.options = opts;
-        }
-        for (const r of recs) {
-          const v = r.data[fieldId]; if (v === undefined || v === null) continue;
-          let nv: unknown;
-          if (newType === cur.type) { try { nv = coerceValue(newLite, v); } catch { nv = null; } }
-          else { const str = displayValue(oldLite, v); try { nv = coerceValue(newLite, newType === "multipleSelects" ? str.split(",").map((s) => s.trim()).filter(Boolean) : str); } catch { nv = null; } }
-          if (JSON.stringify(nv) !== JSON.stringify(v)) await tx.update(baseRecords).set({ data: sql`${baseRecords.data} || ${JSON.stringify({ [fieldId]: nv })}::jsonb` }).where(eq(baseRecords.id, r.id));
-        }
+        const plan = planConversion(cur, newType, opts, recs);
+        set.options = plan.options;
+        for (const ch of plan.changes) await tx.update(baseRecords).set({ data: sql`${baseRecords.data} || ${JSON.stringify({ [fieldId]: ch.value })}::jsonb` }).where(eq(baseRecords.id, ch.id));
       }
     }
     const [row] = await tx.update(baseFields).set(set).where(eq(baseFields.id, fieldId)).returning();
     await audit(tx, ctx, "update_field", "base_fields", fieldId, { before: { name: cur.name, type: cur.type } as never, after: { name: row.name, type: row.type } as never });
     return row;
   });
+}
+
+/**
+ * How stored values change if a field becomes `newType` with `opts`: values that convert, values that
+ * would be cleared (they can't be represented), and select options that would be created.
+ */
+function planConversion(cur: typeof baseFields.$inferSelect, newType: FieldType, optsIn: FieldOptions, recs: { id: string; data: Record<string, unknown> }[]) {
+  const opts: FieldOptions = { ...optsIn };
+  const oldLite = asLite(cur); const newLite: FieldDefLite = { ...oldLite, type: newType, options: opts };
+  let addedChoices: string[] = [];
+  if ((newType === "singleSelect" || newType === "multipleSelects") && newType !== cur.type) {
+    const names = new Set<string>();
+    for (const r of recs) for (const part of displayValue(oldLite, r.data[cur.id]).split(",").map((s) => s.trim()).filter(Boolean)) names.add(part);
+    const existing = new Set((opts.choices ?? []).map((c) => c.name));
+    addedChoices = [...names].filter((n) => !existing.has(n)).slice(0, 200);
+    opts.choices = [...(opts.choices ?? []), ...addedChoices.map((n, i) => ({ id: newChoiceId(), name: n.slice(0, 100), color: COLORS[((opts.choices?.length ?? 0) + i) % COLORS.length] as SelectChoice["color"] }))];
+    newLite.options = opts;
+  }
+  const changes: { id: string; value: unknown; before: unknown }[] = [];
+  let converted = 0, cleared = 0, unchanged = 0, empty = 0;
+  for (const r of recs) {
+    const v = r.data[cur.id]; if (v === undefined || v === null || v === "") { empty++; continue; }
+    let nv: unknown;
+    if (newType === cur.type) { try { nv = coerceValue(newLite, v); } catch { nv = null; } }
+    else { const str = displayValue(oldLite, v); try { nv = coerceValue(newLite, newType === "multipleSelects" ? str.split(",").map((s) => s.trim()).filter(Boolean) : str); } catch { nv = null; } }
+    if (JSON.stringify(nv) === JSON.stringify(v)) { unchanged++; continue; }
+    if (nv === null || (Array.isArray(nv) && !nv.length)) cleared++; else converted++;
+    changes.push({ id: r.id, value: nv, before: v });
+  }
+  return { options: opts, changes, converted, cleared, unchanged, empty, addedChoices };
+}
+
+/** Dry run of a field type/options change: counts and examples, nothing written. */
+export async function previewFieldChange(ctx: Ctx, fieldId: string, patch: { type?: FieldType; options?: FieldOptions }) {
+  const [cur] = await db.select().from(baseFields).where(and(eq(baseFields.id, fieldId), eq(baseFields.orgId, ctx.orgId), isNull(baseFields.archivedAt))).limit(1);
+  if (!cur) throw notFound("Field not found.");
+  const { access } = await tableContext(ctx, cur.tableId); requireRole(access, "creator", "change fields");
+  const newType = patch.type ?? (cur.type as FieldType);
+  if (newType !== cur.type && (cur.type === "link" || newType === "link")) throw invalid("Link fields can't change type. Create a new field instead.");
+  if (isComputed(newType)) return { converted: 0, cleared: 0, unchanged: 0, empty: 0, addedChoices: [] as string[], examples: [] as { before: string; after: string }[], computed: true };
+  const opts = normaliseOptions(newType, { ...(cur.options as FieldOptions), ...(patch.options ?? {}) });
+  const recs = await db.select({ id: baseRecords.id, data: baseRecords.data }).from(baseRecords).where(and(eq(baseRecords.tableId, cur.tableId), isNull(baseRecords.deletedAt)));
+  const p = planConversion(cur, newType, opts, recs);
+  const oldLite = asLite(cur); const newLite: FieldDefLite = { ...oldLite, type: newType, options: p.options };
+  const examples = p.changes.slice(0, 5).map((c) => ({ before: displayValue(oldLite, c.before), after: c.value === null ? "(cleared)" : displayValue(newLite, c.value) }));
+  return { converted: p.converted, cleared: p.cleared, unchanged: p.unchanged, empty: p.empty, addedChoices: p.addedChoices, examples, computed: false };
 }
 
 export async function archiveField(ctx: Ctx, fieldId: string) {
