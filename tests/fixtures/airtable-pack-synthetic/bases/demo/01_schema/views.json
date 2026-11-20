@@ -1,0 +1,10 @@
+{
+  "tblSynProjects001": { "tableId": "tblSynProjects001", "views": [
+    { "id": "viwSynAll", "name": "All projects", "type": "grid" },
+    { "id": "viwSynBoard", "name": "Board", "type": "kanban" },
+    { "id": "viwSynGantt", "name": "Gantt", "type": "block" }
+  ] },
+  "tblSynTasks000001": { "tableId": "tblSynTasks000001", "views": [
+    { "id": "viwSynTasks", "name": "Grid", "type": "grid" }
+  ] }
+}

@@ -1,0 +1,34 @@
+[
+  {
+    "id": "tblSynProjects001",
+    "name": "Projects",
+    "primaryFieldId": "fldPName",
+    "fields": [
+      { "id": "fldPName", "name": "Name", "type": "singleLineText" },
+      { "id": "fldPStatus", "name": "Status", "type": "singleSelect" },
+      { "id": "fldPBudget", "name": "Budget", "type": "currency" },
+      { "id": "fldPTasks", "name": "Tasks", "type": "multipleRecordLinks" },
+      { "id": "fldPCount", "name": "Task count", "type": "count" },
+      { "id": "fldPHours", "name": "Hours", "type": "rollup" },
+      { "id": "fldPOwners", "name": "Owners", "type": "multipleLookupValues" },
+      { "id": "fldPDouble", "name": "Double budget", "type": "formula" },
+      { "id": "fldPBad", "name": "Odd formula", "type": "formula" },
+      { "id": "fldPCreated", "name": "Created", "type": "createdTime" },
+      { "id": "fldPFiles", "name": "Files", "type": "multipleAttachments" },
+      { "id": "fldPNotes", "name": "Notes", "type": "richText" },
+      { "id": "fldPWho", "name": "Created by", "type": "createdBy" }
+    ]
+  },
+  {
+    "id": "tblSynTasks000001",
+    "name": "Tasks",
+    "primaryFieldId": "fldTTitle",
+    "fields": [
+      { "id": "fldTTitle", "name": "Title", "type": "singleLineText" },
+      { "id": "fldTHours", "name": "Hours", "type": "number" },
+      { "id": "fldTOwner", "name": "Owner", "type": "singleLineText" },
+      { "id": "fldTProject", "name": "Project", "type": "multipleRecordLinks" },
+      { "id": "fldTDone", "name": "Done", "type": "checkbox" }
+    ]
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "tableId": "tblSynProjects001",
+    "fields": [
+      { "id": "fldPName", "type": "singleLineText" },
+      { "id": "fldPStatus", "type": "singleSelect", "config": { "choices": [{ "id": "selSynActive", "name": "Active", "color": "blueLight2" }, { "id": "selSynDone", "name": "Done", "color": "greenBright" }] } },
+      { "id": "fldPBudget", "type": "currency", "config": { "precision": 2, "symbol": "£" } },
+      { "id": "fldPTasks", "type": "multipleRecordLinks", "config": { "linkedTableId": "tblSynTasks000001", "inverseLinkFieldId": "fldTProject", "prefersSingleRecordLink": false, "isReversed": false } },
+      { "id": "fldPCount", "type": "count", "config": { "isValid": true, "recordLinkFieldId": "fldPTasks" } },
+      { "id": "fldPHours", "type": "rollup", "config": { "isValid": true, "recordLinkFieldId": "fldPTasks", "fieldIdInLinkedTable": "fldTHours", "referencedFieldIds": [], "result": { "type": "number" } } },
+      { "id": "fldPOwners", "type": "multipleLookupValues", "config": { "isValid": true, "recordLinkFieldId": "fldPTasks", "fieldIdInLinkedTable": "fldTOwner", "result": { "type": "singleLineText" } } },
+      { "id": "fldPDouble", "type": "formula", "config": { "isValid": true, "formula": "{fldPBudget} * 2", "referencedFieldIds": ["fldPBudget"], "result": { "type": "number" } } },
+      { "id": "fldPBad", "type": "formula", "config": { "isValid": true, "formula": "MADEUPFUNCTION({fldPName})", "referencedFieldIds": ["fldPName"], "result": { "type": "singleLineText" } } },
+      { "id": "fldPCreated", "type": "createdTime", "config": { "result": { "type": "dateTime" } } },
+      { "id": "fldPFiles", "type": "multipleAttachments", "config": { "isReversed": false } },
+      { "id": "fldPNotes", "type": "richText" },
+      { "id": "fldPWho", "type": "createdBy" }
+    ]
+  },
+  {
+    "tableId": "tblSynTasks000001",
+    "fields": [
+      { "id": "fldTTitle", "type": "singleLineText" },
+      { "id": "fldTHours", "type": "number", "config": { "precision": 0 } },
+      { "id": "fldTOwner", "type": "singleLineText" },
+      { "id": "fldTProject", "type": "multipleRecordLinks", "config": { "linkedTableId": "tblSynProjects001", "inverseLinkFieldId": "fldPTasks", "prefersSingleRecordLink": true, "isReversed": false } },
+      { "id": "fldTDone", "type": "checkbox", "config": { "icon": "check", "color": "greenBright" } }
+    ]
+  }
+]

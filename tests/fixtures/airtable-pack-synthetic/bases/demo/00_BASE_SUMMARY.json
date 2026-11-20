@@ -1,0 +1,10 @@
+{
+  "baseId": "appSynthetic00001",
+  "baseName": "Synthetic Studio (fictional test fixture)",
+  "tables": 2,
+  "fields": 18,
+  "records": 5,
+  "views": 4,
+  "automationDefinitions": 3,
+  "tableRecordCounts": { "tblSynProjects001": 2, "tblSynTasks000001": 3 }
+}

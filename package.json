@@ -19,6 +19,7 @@
     "db:reset": "tsx scripts/reset-db.ts",
     "jobs:run": "tsx scripts/run-jobs.ts",
     "import:airtable": "tsx scripts/import-airtable.ts",
+    "import:airtable-pack": "tsx scripts/import-airtable-pack.ts",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh",
     "test": "vitest run",

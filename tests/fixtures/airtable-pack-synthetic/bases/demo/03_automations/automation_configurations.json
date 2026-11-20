@@ -1,0 +1,43 @@
+[
+  {
+    "id": "wflSynMarkDone",
+    "name": "Owner set → mark done and email",
+    "config": {
+      "id": "wflSynMarkDone", "name": "Owner set → mark done and email", "description": null, "deploymentStatus": "deployed", "deploymentError": null,
+      "trigger": { "type": "recordMatchesConditions", "inputs": { "tableId": "tblSynTasks000001", "filtersObj": { "obj": { "operator": "and", "operands": { "tuple": [{ "obj": { "operator": "isNotEmpty", "operands": { "tuple": ["fldTOwner"] }, "operatorOptions": null } }] } } } } },
+      "nodes": [
+        { "key": "n1", "type": "updateRecord", "inputs": { "tableId": "tblSynTasks000001", "rowId": { "template": [{ "$ref": "trigger", "path": ["id"] }] }, "updateRecordMethod": "customFields", "fields": { "obj": { "fldTDone": true } } } },
+        { "key": "n2", "type": "gmailSendEmail", "inputs": { "to": "nobody@example.test" } }
+      ],
+      "deployedVersion": null, "configurationStatus": "complete"
+    }
+  },
+  {
+    "id": "wflSynExternal",
+    "name": "Webhook from another system",
+    "config": {
+      "id": "wflSynExternal", "name": "Webhook from another system", "description": null, "deploymentStatus": "undeployed", "deploymentError": null,
+      "trigger": { "type": "inputReceivedFromConnection", "inputs": {} },
+      "nodes": [{ "key": "n1", "type": "customScript", "inputs": {} }],
+      "deployedVersion": null, "configurationStatus": "complete"
+    }
+  },
+  {
+    "id": "wflSynKickoff",
+    "name": "New project → kickoff task",
+    "config": {
+      "id": "wflSynKickoff", "name": "New project → kickoff task", "description": null, "deploymentStatus": "undeployed", "deploymentError": null,
+      "trigger": { "type": "recordCreated", "inputs": { "tableId": "tblSynProjects001" } },
+      "nodes": [
+        { "key": "n1", "type": "conditionalGroup", "branches": [
+          { "condition": { "conjunction": "and", "conditions": [{ "left": { "$ref": "trigger", "path": ["cellValuesByFieldId", "fldPBudget"] }, "operator": ">", "right": 100, "valueType": "number", "dataType": "literal" }] },
+            "nodes": [{ "key": "n2", "type": "createRecord", "inputs": { "createRecordMethod": "customFields", "tableId": "tblSynTasks000001", "fields": { "obj": {
+              "fldTTitle": { "template": ["Kickoff for ", { "$ref": "trigger", "path": ["cellValuesByFieldId", "fldPName"] }] },
+              "fldTProject": { "template": [{ "$ref": "trigger", "path": ["id"] }] } } } } }] },
+          { "nodes": [{ "key": "n3", "type": "googleCalendarCreateEvent", "inputs": {} }] }
+        ] }
+      ],
+      "deployedVersion": null, "configurationStatus": "complete"
+    }
+  }
+]

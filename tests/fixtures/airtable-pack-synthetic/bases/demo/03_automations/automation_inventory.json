@@ -1,0 +1,5 @@
+[
+  { "id": "wflSynMarkDone", "name": "Owner set → mark done and email", "deploymentStatus": "deployed" },
+  { "id": "wflSynExternal", "name": "Webhook from another system", "deploymentStatus": "undeployed" },
+  { "id": "wflSynKickoff", "name": "New project → kickoff task", "deploymentStatus": "undeployed" }
+]

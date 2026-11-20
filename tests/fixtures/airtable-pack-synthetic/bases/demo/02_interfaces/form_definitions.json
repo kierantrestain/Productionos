@@ -1,0 +1,24 @@
+[
+  {
+    "pageId": "pagSynForm1",
+    "name": "Log a task",
+    "schema": {
+      "pageId": "pagSynForm1",
+      "interfaceId": null,
+      "name": "Log a task",
+      "description": "Fictional synthetic form",
+      "submissionAction": "create",
+      "sourceTableId": "tblSynTasks000001",
+      "sourceTableName": "Tasks",
+      "sections": [
+        { "id": "sec1", "title": "Basics", "isInitiallyCollapsed": false, "rows": [
+          { "elements": [{ "fieldId": "fldTTitle", "label": "Title", "fieldType": "singleLineText", "isRequired": true, "isReadOnly": false }] },
+          { "elements": [{ "fieldId": "fldTHours", "label": "Hours", "fieldType": "number", "isRequired": false, "isReadOnly": false, "helperText": "Whole hours" }] }
+        ] },
+        { "id": "sec2", "title": "More", "isInitiallyCollapsed": true, "rows": [
+          { "elements": [{ "fieldId": "fldTOwner", "label": "Owner", "fieldType": "singleLineText", "isRequired": false, "isReadOnly": false, "prefilledValue": "Ava" }] }
+        ] }
+      ]
+    }
+  }
+]

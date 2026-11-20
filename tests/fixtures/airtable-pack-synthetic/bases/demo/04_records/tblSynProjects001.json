@@ -1,0 +1,42 @@
+{
+  "sourceBaseId": "appSynthetic00001",
+  "sourceTableId": "tblSynProjects001",
+  "sourceTableName": "Projects",
+  "total": 2,
+  "records": [
+    {
+      "id": "recSynP1",
+      "createdTime": "2025-03-01T09:30:00.000Z",
+      "cellValuesByFieldId": {
+        "fldPName": "Pilot",
+        "fldPStatus": { "id": "selSynActive", "name": "Active", "color": "blueLight2" },
+        "fldPBudget": 1000,
+        "fldPTasks": [{ "id": "recSynT1", "name": "Shoot" }, { "id": "recSynT2", "name": "Edit" }],
+        "fldPCount": 2,
+        "fldPHours": 50,
+        "fldPOwners": { "linkedRecordIds": ["recSynT1", "recSynT2"], "valuesByLinkedRecordId": { "recSynT1": ["Ava"], "recSynT2": ["Ben"] } },
+        "fldPDouble": 2000,
+        "fldPBad": "PILOT",
+        "fldPCreated": "2025-03-01T09:30:00.000Z",
+        "fldPFiles": [{ "id": "attSyn1", "filename": "storyboard.pdf", "size": 1234, "type": "application/pdf" }],
+        "fldPNotes": "**Bold** plan",
+        "fldPWho": { "id": "usrSyn1", "name": "Example Person", "email": "person@example.test" }
+      }
+    },
+    {
+      "id": "recSynP2",
+      "createdTime": "2025-04-02T10:00:00.000Z",
+      "cellValuesByFieldId": {
+        "fldPName": "Promo",
+        "fldPStatus": { "id": "selSynDone", "name": "Done", "color": "greenBright" },
+        "fldPBudget": 500,
+        "fldPTasks": [{ "id": "recSynT3", "name": "Grade" }, { "id": "recSynGONE", "name": "Deleted task" }],
+        "fldPCount": 1,
+        "fldPHours": 5,
+        "fldPDouble": 1000,
+        "fldPBad": "PROMO",
+        "fldPCreated": "2025-04-02T10:00:00.000Z"
+      }
+    }
+  ]
+}

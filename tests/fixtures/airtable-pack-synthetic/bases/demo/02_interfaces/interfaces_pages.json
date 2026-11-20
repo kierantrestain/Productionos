@@ -1,0 +1,12 @@
+{
+  "interfaces": [
+    { "id": "pbdSynOps", "name": "Ops", "pages": [
+      { "id": "pagSynDash", "interfaceId": "pbdSynOps", "name": "Dashboard", "description": "", "pageType": "dashboard", "content": "" },
+      { "id": "pagSynList", "interfaceId": "pbdSynOps", "name": "All tasks", "description": "", "pageType": "list", "content": "" }
+    ] }
+  ],
+  "recordDetailPages": [{ "id": "pagSynDetail", "name": "Project detail", "sourceTableId": "tblSynProjects001" }],
+  "draftPages": [{ "id": "pagSynDraft", "interfaceId": null, "interfaceName": null, "pageType": "list" }],
+  "standaloneForms": [{ "id": "pagSynForm1", "interfaceId": null, "name": "Log a task", "pageType": "form", "sourceTableId": "tblSynTasks000001", "sourceTableName": "Tasks", "description": "" }],
+  "embeddedForms": []
+}

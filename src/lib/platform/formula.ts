@@ -110,6 +110,7 @@ const flat = (args: V[]) => args.flatMap((a) => (Array.isArray(a) ? a : [a]));
 const FUNCS: Record<string, (a: V[], now: Date) => V> = {
   IF: (a) => (toBool(a[0]) ? a[1] : a.length > 2 ? a[2] : null),
   SWITCH: (a) => { for (let i = 1; i + 1 < a.length; i += 2) if (toStr(a[0]) === toStr(a[i])) return a[i + 1]; return a.length % 2 === 0 ? a[a.length - 1] : null; },
+  TRUE: () => true, FALSE: () => false,
   AND: (a) => flat(a).every(toBool), OR: (a) => flat(a).some(toBool), NOT: (a) => !toBool(a[0]), XOR: (a) => flat(a).filter(toBool).length % 2 === 1,
   BLANK: () => null, ISBLANK: (a) => isBlank(a[0]), ISERROR: () => false,
   SUM: (a) => flat(a).reduce((s: number, x) => s + toNum(x), 0),

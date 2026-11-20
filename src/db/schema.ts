@@ -1413,3 +1413,14 @@ export const baseApprovals = pgTable("base_approvals", {
   decidedAt: ts("decided_at"),
   createdAt: ts("created_at").notNull().defaultNow(),
 }, (t) => [index("base_approvals_base_status").on(t.baseId, t.status)]);
+
+/** Source → target identity map for resumable, idempotent migrations (e.g. Airtable export packs). */
+export const migrationMap = pgTable("migration_map", {
+  orgId: uuid("org_id").notNull().references(() => organisations.id, { onDelete: "cascade" }),
+  sourceSystem: text("source_system").notNull(), // e.g. "airtable"
+  sourceKind: text("source_kind").notNull(), // base | table | field | view | form | automation
+  sourceId: text("source_id").notNull(),
+  targetId: uuid("target_id").notNull(),
+  meta: jsonb("meta").$type<Record<string, unknown>>(),
+  createdAt: ts("created_at").notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.orgId, t.sourceSystem, t.sourceKind, t.sourceId] }), index("migration_map_target").on(t.targetId)]);
