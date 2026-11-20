@@ -54,7 +54,7 @@ export interface GridProps {
   onDuplicate: (id: string) => void;
   onSetColor: (ids: string[], color: string | null) => void;
   onFieldAction: (f: ClientField, action: string) => void;
-  onAddField: () => void;
+  onAddField: (anchor?: DOMRect) => void;
   onConfig: (patch: ViewConfig) => void;
   onAiFill: (fieldId: string, ids: string[]) => void;
   onReload?: () => void;
@@ -264,7 +264,7 @@ export function Grid(p: GridProps) {
         {fields.map((f, c) => (sticky(c) ? null :
           <HeaderCell key={f.id} f={f} w={width(f)} items={headerItems(f)} onResize={startResize} sort={config.sorts?.find((s) => s.fieldId === f.id)?.dir}
             draggable={p.can.viewEdit} onDragStart={() => setDrag(f.id)} onDrop={() => dropOn(f)} />))}
-        {p.can.schema && <button type="button" className="g-addcol" aria-label="Add field" onClick={p.onAddField}><Plus size={16} /></button>}
+        {p.can.schema && <button type="button" className="g-addcol" aria-label="Add field" onClick={(e) => p.onAddField(e.currentTarget.getBoundingClientRect())}><Plus size={16} /></button>}
       </div>
 
       {/* Body */}
@@ -357,7 +357,7 @@ export function Grid(p: GridProps) {
 
 function HeaderCell({ f, w, items, onResize, sort, draggable, onDragStart, onDrop }: { f: ClientField; w: number; items: MenuItems; onResize: (f: ClientField, e: React.PointerEvent) => void; sort?: string; draggable?: boolean; onDragStart?: () => void; onDrop?: () => void }) {
   return (
-    <div className="g-hcell" style={{ width: w }} title={f.description ?? f.name} draggable={draggable} onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div className="g-hcell" data-field-id={f.id} style={{ width: w }} title={f.description ?? f.name} draggable={draggable} onDragStart={onDragStart} onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <span className="ic"><FieldIcon type={f.type} /></span>
       <span className="nm">{f.name}</span>
       {!f.editable && !isComputed(f.type) && <Lock size={11} aria-label="Read-only for you" />}

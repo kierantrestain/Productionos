@@ -13,14 +13,14 @@ const GROUPS: Record<string, string> = { basic: "Basic", choice: "Choices", date
 const inp: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 10px" };
 const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", margin: "12px 0 4px" };
 
-export function FieldDialog({ data, field, afterFieldId, onClose, onSaved }: { data: BaseData; field: ClientField | null; afterFieldId?: string; onClose: () => void; onSaved: () => void }) {
+export function FieldDialog({ data, field, afterFieldId, onClose, onSaved, initialType, initialLinkTableId }: { data: BaseData; field: ClientField | null; afterFieldId?: string; onClose: () => void; onSaved: () => void; initialType?: FieldType; initialLinkTableId?: string }) {
   const editing = !!field;
   const tableFields = data.baseFields.filter((f) => f.tableId === data.table.id);
-  const [name, setName] = useState(field?.name ?? "");
-  const [type, setType] = useState<FieldType>(field?.type ?? "singleLineText");
+  const [name, setName] = useState(field?.name ?? (initialLinkTableId ? data.tables.find((t) => t.id === initialLinkTableId)?.name ?? "" : ""));
+  const [type, setType] = useState<FieldType>(field?.type ?? initialType ?? "singleLineText");
   const [description, setDescription] = useState(field?.description ?? "");
   const [o, setO] = useState<FieldOptions>(() => {
-    const opts = { ...(field?.options ?? {}) };
+    const opts: FieldOptions = { ...(field?.options ?? {}), ...(!field && initialLinkTableId ? { linkedTableId: initialLinkTableId } : {}) };
     if (opts.formula) opts.formula = toDisplay(opts.formula, data.baseFields);
     return opts;
   });

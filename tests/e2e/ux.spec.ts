@@ -135,4 +135,43 @@ test.describe.serial("usability", () => {
     await page.getByRole("option", { name: /^Settings/ }).click();
     await expect(page).toHaveURL(/\/workspace\/settings/);
   });
+
+  test("table switcher (search, hide, jump), add-table sources, and the field-type picker", async ({ page }) => {
+    await login(page);
+    const baseId = await firstBase(page);
+    await page.goto(`/base/${baseId}`);
+    await page.waitForURL(/\/base\/[^/]+\/[^/]+\/[^/?]+/);
+    const tabs = page.getByRole("navigation", { name: "Tables" });
+    await tabs.getByRole("button", { name: "All tables" }).click();
+    const sw = page.getByRole("dialog", { name: "All tables" });
+    const names = (await sw.getByRole("option").allInnerTexts()).map((x) => x.trim());
+    expect(names.length).toBeGreaterThan(1);
+    const other = names.find((n, i) => i > 0)!;
+    await sw.getByRole("button", { name: `Hide ${other} from the tab bar` }).click();
+    await page.keyboard.press("Escape");
+    await expect(tabs.getByRole("button", { name: other, exact: true })).toHaveCount(0);
+    await tabs.getByRole("button", { name: "All tables" }).click();
+    await sw.getByPlaceholder("Find a table").fill(other.slice(0, 4));
+    await page.keyboard.press("Enter");
+    await expect(tabs.getByRole("button", { name: other })).toHaveAttribute("aria-current", "page"); // current table always shown
+    await tabs.getByRole("button", { name: "All tables" }).click();
+    await sw.getByRole("button", { name: `Show ${other} in the tab bar` }).click();
+    await page.keyboard.press("Escape");
+    await tabs.getByRole("button", { name: "Add or import a table" }).click();
+    const add = page.getByRole("dialog", { name: "Add a table" });
+    await expect(add).toContainText("Start from scratch");
+    await expect(add).toContainText("CSV or Excel file");
+    await page.keyboard.press("Escape");
+    await expect(add).toHaveCount(0);
+    // field-type picker → dialog pre-set to the chosen type → field created
+    await page.getByRole("button", { name: "Add field" }).click();
+    const pick = page.getByRole("dialog", { name: "Add a field" });
+    await pick.getByPlaceholder("Find a field type").fill("curr");
+    await pick.getByRole("button", { name: "Currency" }).click();
+    await expect(page.locator("#fd-type")).toHaveValue("currency");
+    const fname = `Fee ${Date.now() % 100000}`;
+    await page.locator("#fd-name").fill(fname);
+    await page.getByRole("button", { name: "Create field" }).click();
+    await expect(page.locator(".g-hcell", { hasText: fname })).toHaveCount(1); // new column exists (may be scrolled off to the right)
+  });
 });

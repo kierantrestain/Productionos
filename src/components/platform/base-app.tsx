@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Dialog } from "@/components/ui/modal";
 import { Button } from "@astryxdesign/core/Button";
-import { ChevronDown, Plus, Search, User, Users, Upload, Table2, Lock } from "lucide-react";
+import { ChevronDown, Plus, Search, User, Users, Table2, Lock } from "lucide-react";
 import type { ViewConfig } from "@/db/schema";
 import { isComputed } from "@/lib/platform/fields";
 import {
@@ -19,6 +19,9 @@ import { Toolbar } from "./toolbar";
 import { FieldDialog } from "./field-dialog";
 import { RecordDialog } from "./record-dialog";
 import { ImportDialog } from "./import-dialog";
+import { AddTableMenu, FieldTypePicker, TableSwitcher } from "./table-tools";
+import { AiBuilderDialog } from "./ai-builder";
+import type { FieldType } from "@/lib/platform/fields";
 import { CalendarView, FormView, GalleryView, KanbanView, ListView, TimelineView } from "./views";
 import { toServerValue } from "./cells";
 import type { BaseData, ClientField, ClientRow } from "./types";
@@ -33,7 +36,17 @@ export function BaseApp({ data }: { data: BaseData }) {
   const [config, setConfig] = useState<ViewConfig>(data.view.config);
   const [search, setSearch] = useState("");
   const [sidebar, setSidebar] = useState(true);
-  const [fieldDlg, setFieldDlg] = useState<{ field: ClientField | null; after?: string } | null>(null);
+  const [fieldDlg, setFieldDlg] = useState<{ field: ClientField | null; after?: string; type?: FieldType; linkTableId?: string } | null>(null);
+  const [picker, setPicker] = useState<{ anchor: DOMRect; after?: string } | null>(null);
+  const [tablesPop, setTablesPop] = useState<DOMRect | null>(null);
+  const [addTablePop, setAddTablePop] = useState<DOMRect | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
+  // Tables hidden from the tab bar: a per-person, per-browser preference (the table itself is unaffected).
+  const hiddenKey = `bangon:hiddenTables:${data.base.id}`;
+  const [hiddenTables, setHiddenTables] = useState<Set<string>>(new Set());
+  useEffect(() => { try { setHiddenTables(new Set(JSON.parse(localStorage.getItem(hiddenKey) ?? "[]"))); } catch { /* storage blocked */ } }, [hiddenKey]);
+  const toggleHidden = (id: string) => setHiddenTables((h) => { const n = new Set(h); if (n.has(id)) n.delete(id); else n.add(id); try { localStorage.setItem(hiddenKey, JSON.stringify([...n])); } catch { /* ignore */ } return n; });
+  const addBlankTable = async () => { const r = await createTableAction(data.base.id, `Table ${data.tables.length + 1}`); if (!r.ok) notify(r.error); else { go(r.data.id); router.refresh(); } };
   const [recordId, setRecordId] = useState<string | null>(params.get("record"));
   const [importOpen, setImportOpen] = useState(false);
   const [confirm, setConfirm] = useState<{ title: string; body: string; run: () => Promise<void> } | null>(null);
@@ -120,7 +133,7 @@ export function BaseApp({ data }: { data: BaseData }) {
 
   const fieldAction = async (f: ClientField, action: string) => {
     if (action === "edit") setFieldDlg({ field: f });
-    else if (action === "insertRight") setFieldDlg({ field: null, after: f.id });
+    else if (action === "insertRight") { const el = document.querySelector(`[data-field-id="${f.id}"]`); setPicker({ anchor: el?.getBoundingClientRect() ?? new DOMRect(window.innerWidth / 2 - 200, 120, 0, 0), after: f.id }); }
     else if (action === "primary") { const r = await updateTableAction(data.table.id, { primaryFieldId: f.id }); if (!r.ok) notify(r.error); else router.refresh(); }
     else if (action === "duplicate") { const r = await createFieldAction(data.table.id, { name: `${f.name} copy`, type: f.type, options: f.options, description: f.description, afterFieldId: f.id }); if (!r.ok) notify(r.error); else router.refresh(); }
     else if (action === "filter") onConfig({ filters: { conjunction: config.filters?.conjunction ?? "and", conditions: [...(config.filters?.conditions ?? []), { fieldId: f.id, op: f.type === "checkbox" ? "isChecked" : "isNotEmpty" }] } });
@@ -162,7 +175,7 @@ export function BaseApp({ data }: { data: BaseData }) {
         ? <input className="p-name" aria-label="Base name" defaultValue={data.base.name} onBlur={async (e) => { const n = e.target.value.trim(); if (n && n !== data.base.name) { const r = await updateBaseAction(data.base.id, { name: n }); if (!r.ok) notify(r.error); } }} onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()} style={{ width: `${Math.max(8, data.base.name.length + 2)}ch` }} />
         : undefined} />
       <nav className="p-tables" aria-label="Tables" style={{ background: HEAD_BG[data.base.color] ?? HEAD_BG.blue }}>
-        {data.tables.map((t) => t.id === data.table.id && data.can.schema ? (
+        {data.tables.filter((t) => t.id === data.table.id || !hiddenTables.has(t.id)).map((t) => t.id === data.table.id && data.can.schema ? (
           <DropdownMenu key={t.id} menuWidth={200} items={[
             { label: "Rename table", onClick: async () => { const n = (await promptDialog("Table name", t.name)); if (n?.trim()) { const r = await updateTableAction(t.id, { name: n.trim() }); if (!r.ok) notify(r.error); else router.refresh(); } } },
             { label: "Edit table permissions", onClick: () => setConfirm({ title: "Table permissions", body: "perm", run: async () => {} }) },
@@ -171,12 +184,10 @@ export function BaseApp({ data }: { data: BaseData }) {
         ) : (
           <button key={t.id} type="button" aria-current={t.id === data.table.id ? "page" : undefined} className="p-tabletab" onClick={() => go(t.id)}>{t.name}</button>
         ))}
-        {data.can.schema && (
-          <DropdownMenu menuWidth={220} items={[
-            { label: "Blank table", icon: <Table2 size={14} />, onClick: async () => { const r = await createTableAction(data.base.id, `Table ${data.tables.length + 1}`); if (!r.ok) notify(r.error); else { go(r.data.id); router.refresh(); } } },
-            { label: "Import CSV or Excel", icon: <Upload size={14} />, onClick: () => setImportOpen(true) },
-          ]} renderTrigger={(tp) => <button type="button" {...tp} className="p-tabletab" aria-label="Add or import a table"><Plus size={14} /></button>} />
-        )}
+        <span className="p-tables-more">
+          <button type="button" className="p-tabletab" aria-label="All tables" title="All tables" aria-haspopup="dialog" onClick={(e) => setTablesPop(e.currentTarget.getBoundingClientRect())}><ChevronDown size={15} />{hiddenTables.size > 0 && <span style={{ fontSize: 11, opacity: .85 }}>{hiddenTables.size} hidden</span>}</button>
+          {data.can.schema && <button type="button" className="p-tabletab" aria-label="Add or import a table" title="Add or import a table" aria-haspopup="dialog" onClick={(e) => setAddTablePop(e.currentTarget.getBoundingClientRect())}><Plus size={15} /></button>}
+        </span>
       </nav>
 
       <div className="p-body">
@@ -214,7 +225,7 @@ export function BaseApp({ data }: { data: BaseData }) {
             can={{ create: data.can.create, edit: data.can.edit, delete: data.can.delete, schema: data.can.schema, viewEdit: data.view.canEdit }}
             onEdit={onEdit} onAddRow={(after, v) => create(v ?? {}, after)} onExpand={setRecordId} onDeleteRows={deleteRows} onDuplicate={duplicate}
             onSetColor={async (ids2, c) => { setRows((rs) => rs.map((r) => (ids2.includes(r.id) ? { ...r, color: c } : r))); const r = await setRowColorAction(ids2, c); if (!r.ok) notify(r.error); else if (config.color?.mode && config.color.mode !== "none") notify("Row colours from this view's colour rules take priority"); }}
-            onFieldAction={fieldAction} onAddField={() => setFieldDlg({ field: null })} onConfig={onConfig} onAiFill={aiFill} notify={notify} onReload={() => reload()} onButton={pressButton} />}
+            onFieldAction={fieldAction} onAddField={(anchor) => setPicker({ anchor: anchor ?? new DOMRect(window.innerWidth - 420, 120, 0, 0) })} onConfig={onConfig} onAiFill={aiFill} notify={notify} onReload={() => reload()} onButton={pressButton} />}
           {view.type === "kanban" && <KanbanView {...viewProps} />}
           {view.type === "calendar" && <CalendarView {...viewProps} />}
           {view.type === "gallery" && <GalleryView {...viewProps} />}
@@ -224,10 +235,14 @@ export function BaseApp({ data }: { data: BaseData }) {
         </main>
       </div>
 
-      {fieldDlg && <FieldDialog data={data} field={fieldDlg.field} afterFieldId={fieldDlg.after} onClose={() => setFieldDlg(null)} onSaved={() => { setFieldDlg(null); router.refresh(); }} />}
+      {fieldDlg && <FieldDialog data={data} field={fieldDlg.field} afterFieldId={fieldDlg.after} initialType={fieldDlg.type} initialLinkTableId={fieldDlg.linkTableId} onClose={() => setFieldDlg(null)} onSaved={() => { setFieldDlg(null); router.refresh(); }} />}
       {recordId && <RecordDialog data={data} recordId={recordId} ids={ids} onNavigate={setRecordId} onClose={() => { setRecordId(null); reload(); }}
         onEdit={(rid, fid, v, before) => onEdit([{ recordId: rid, fieldId: fid, value: v, before }])} onDelete={(id) => deleteRows([id])} onAiFill={aiFill} />}
       <ImportDialog isOpen={importOpen} onClose={() => setImportOpen(false)} baseId={data.base.id} />
+      {picker && <FieldTypePicker anchor={picker.anchor} onClose={() => setPicker(null)} tables={data.tables} aiConfigured={data.aiConfigured} onPick={(type, linkTableId) => { setFieldDlg({ field: null, after: picker.after, type, linkTableId }); setPicker(null); }} />}
+      {tablesPop && <TableSwitcher anchor={tablesPop} tables={data.tables} currentId={data.table.id} hidden={hiddenTables} onToggleHidden={toggleHidden} onPick={(id) => { setTablesPop(null); if (id !== data.table.id) go(id); }} onAdd={data.can.schema ? (r) => { setTablesPop(null); setAddTablePop(r); } : undefined} onClose={() => setTablesPop(null)} />}
+      {addTablePop && <AddTableMenu anchor={addTablePop} onClose={() => setAddTablePop(null)} aiConfigured={data.aiConfigured} onBlank={addBlankTable} onImport={() => setImportOpen(true)} onSync={() => router.push(`/base/${data.base.id}/sync`)} onAi={() => setAiOpen(true)} />}
+      <AiBuilderDialog isOpen={aiOpen} onClose={() => setAiOpen(false)} />
       {confirm && confirm.body === "perm" ? <TablePermsDialog data={data} onClose={() => setConfirm(null)} onSaved={() => { setConfirm(null); router.refresh(); notify("Table permissions saved"); }} /> : confirm && (
         <Dialog isOpen onOpenChange={(o) => !o && setConfirm(null)} width={440} padding={6} purpose="form">
           <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>{confirm.title}</h2>

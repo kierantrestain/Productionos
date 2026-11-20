@@ -82,7 +82,7 @@ test.describe.serial("apps built with the no-code builder", () => {
     await expect(c.getByText("Thanks — your account manager has it.")).toBeVisible();
     await c.goto("/production"); await expect(c).not.toHaveURL(/\/production/);
     const res = await c.request.get("/templates"); expect(res.status()).toBeLessThan(500);
-    await c.goto(crmUrl); await expect(c.getByText(/not found|could not be found/i)).toBeVisible();
+    await c.waitForLoadState("networkidle"); await c.goto(crmUrl); await expect(c.getByText(/not found|could not be found/i)).toBeVisible();
     await c.context().close();
   });
 });
