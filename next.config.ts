@@ -9,6 +9,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Docker image: a self-contained server (NEXT_OUTPUT=standalone is set by the Dockerfile).
+  ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" as const } : {}),
   // Lets a dev server run beside a production build without overwriting it (local debugging only).
   distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: ["postgres"],

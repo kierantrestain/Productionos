@@ -120,7 +120,7 @@ test.describe.serial("usability", () => {
     await page.getByRole("radio", { name: /Light/ }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Integrations & status" }).click();
-    await expect(page.getByRole("region", { name: "Integrations & system status" })).toContainText("AI (Claude)");
+    await expect(page.getByRole("region", { name: "Integrations & system status" })).toContainText("Secret encryption");
     const baseId = await firstBase(page);
     await page.goto(`/base/${baseId}`);
     const rail = page.getByRole("navigation", { name: "Workspace" });

@@ -1,0 +1,12 @@
+node_modules
+.next
+.next-dev
+.git
+test-results
+playwright-report
+backups
+private-import
+.env
+.env.*
+!.env.selfhost.example
+*.log

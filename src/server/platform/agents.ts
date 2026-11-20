@@ -18,6 +18,7 @@ import { atLeast, baseAccess, requireRole } from "./access";
 import { fileApproval } from "./approvals";
 import { runView } from "./query";
 import { aiConfigured } from "./ai";
+import { aiProvider, localAiClient } from "./local-ai";
 import { composioConfigured, isReadTool, listAppTools, myConnections, runAppTool } from "../integrations/composio";
 import { chatgptResponses } from "../integrations/chatgpt";
 
@@ -31,7 +32,8 @@ let clientOverride: Client | null = null;
 export function __setAgentClient(c: Client | null) { clientOverride = c; }
 function client(): Client {
   if (clientOverride) return clientOverride;
-  if (!aiConfigured()) throw invalid("AI isn't configured. An administrator must set ANTHROPIC_API_KEY in the deployment environment.");
+  if (!aiConfigured()) throw invalid("AI isn't configured. An administrator must set ANTHROPIC_API_KEY, or point LOCAL_AI_BASE_URL at a private model.");
+  if (aiProvider() === "local") return localAiClient() as unknown as Client;
   return new Anthropic() as unknown as Client;
 }
 

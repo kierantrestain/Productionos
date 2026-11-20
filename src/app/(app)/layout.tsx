@@ -1,3 +1,4 @@
+import "../platform.css";
 import { redirect } from "next/navigation";
 import { requirePageContext } from "@/server/auth/request";
 import { navFor } from "@/lib/nav";

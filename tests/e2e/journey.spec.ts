@@ -192,6 +192,7 @@ test.describe("responsive layouts (acceptance 27)", () => {
         expect(overflow, `${path} overflows by ${overflow}px`).toBeLessThanOrEqual(1);
       }
       await p.goto("/schedule?month=2027-03");
+      await p.waitForLoadState("networkidle");
       await p.locator(".cal .ev").first().click();
       await p.waitForURL(/\/schedule\/day\//);
       await expect(p.getByRole("heading", { name: "Shoot-Day Command" })).toBeVisible();

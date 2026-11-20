@@ -10,11 +10,12 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 import { FIELD_TYPES, displayValue, operatorsFor, type FieldDefLite } from "@/lib/platform/fields";
 import { invalid } from "../errors";
+import { aiProvider, localAiClient } from "./local-ai";
 import type { BaseSpec, SpecTable } from "./spec";
 import { validateSpec } from "./spec";
 
 const MODEL = "claude-opus-5-5";
-export const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
+export const aiConfigured = () => aiProvider() !== "off";
 
 let _client: Anthropic | null = null;
 let _override: Anthropic | null = null;
@@ -23,7 +24,8 @@ export function __setAiClient(c: unknown) { _override = c as Anthropic | null; }
 export function aiClient() { return client(); }
 function client() {
   if (_override) return _override;
-  if (!aiConfigured()) throw invalid("AI is not configured. An administrator must set ANTHROPIC_API_KEY in the deployment environment.");
+  if (!aiConfigured()) throw invalid("AI is not configured. An administrator must set ANTHROPIC_API_KEY, or point LOCAL_AI_BASE_URL at a private model.");
+  if (aiProvider() === "local") return localAiClient() as unknown as Anthropic;
   return (_client ??= new Anthropic());
 }
 

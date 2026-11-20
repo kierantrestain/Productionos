@@ -10,12 +10,24 @@ import { OrgConfigProvider } from "./org-config";
 import type { CustomFieldDefShape, OrgSettingsShape } from "@/lib/customise";
 import { Icon } from "./icons";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { AppShell } from "@astryxdesign/core/AppShell";
+import { SideNav, SideNavHeading, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
+import { Avatar } from "@astryxdesign/core/Avatar";
+import { Home, LogOut, Search, Settings } from "lucide-react";
+import { Assistant } from "@/components/hub/assistant";
+
+/** Stable icon components for the Astryx side navigation (one per icon name). */
+type SvgIcon = (p: React.SVGProps<SVGSVGElement>) => React.ReactElement;
+const ICONS = new Map<string, SvgIcon>();
+function iconFor(name: string) {
+  let C = ICONS.get(name);
+  if (!C) { const Named: SvgIcon = (p) => <Icon name={name} size={Number(p.width ?? p.height ?? 18) || 18} />; ICONS.set(name, Named); C = Named; }
+  return C;
+}
 
 export function Shell({ nav, user, children, orgs = [], orgId, config = { settings: {}, customFields: [] } }: { nav: NavItem[]; user: { name: string; role: Role; orgName: string; isDemo: boolean }; children: React.ReactNode; orgs?: { id: string; name: string; isDemo: boolean }[]; orgId?: string; config?: { settings: OrgSettingsShape; customFields: CustomFieldDefShape[] } }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
   const [palette, setPalette] = useState(false);
-  useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     const k = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(true); } };
     window.addEventListener("keydown", k);
@@ -27,40 +39,39 @@ export function Shell({ nav, user, children, orgs = [], orgId, config = { settin
     <ToastProvider>
       <OrgConfigProvider value={config}>
       <a href="#main" className="sr-only">Skip to content</a>
-      <div className="shell" data-nav-open={open}>
-        <aside className="sidebar" aria-label="Primary">
-          <Link href="/" className="brand" style={{ color: "inherit", textDecoration: "none" }}><span className="brand-mark">B</span><div>Bang On OS<small>Production Suite · {user.orgName}</small></div></Link>
-          <nav className="nav">
+      <div className="p-root suite-root">
+      <AppShell variant="elevated" contentPadding={0}
+        sideNav={
+          <SideNav collapsible
+            header={<SideNavHeading heading={user.orgName} subheading="Production Suite" icon={<span className="p-tile p-c-red" style={{ width: 28, height: 28, borderRadius: 8, fontWeight: 800, fontSize: 13 }}>B</span>}
+              menu={orgs.length > 1 ? <div style={{ display: "grid", gap: 4, minWidth: 220 }}>{orgs.map((o) => <button key={o.id} className="p-viewitem" onClick={() => switchOrgAction(o.id)} aria-current={o.id === orgId ? "page" : undefined}>{o.name}{o.isDemo ? " (demo)" : ""}</button>)}</div> : undefined} />}
+            footer={<div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 4px" }}>
+              <Avatar name={user.name} size="sm" />
+              <div style={{ minWidth: 0, flex: 1 }}><div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div><div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{ROLE_LABELS[user.role]}</div></div>
+              <ThemeToggle />
+              <form action={logoutAction}><button className="p-tbtn" aria-label="Sign out" title="Sign out"><LogOut size={15} /></button></form>
+            </div>}>
             {sections.map((s) => (
-              <div key={s} style={{ display: "contents" }}>
-                <div className="nav-section">{s}</div>
-                {nav.filter((n) => n.section === s).map((n) => (
-                  <Link key={n.href} href={n.href} aria-current={isActive(n.href) ? "page" : undefined}><Icon name={n.icon} />{n.label}</Link>
-                ))}
-              </div>
+              <SideNavSection key={s} title={s}>
+                {nav.filter((n) => n.section === s).map((n) => <SideNavItem key={n.href} label={n.label} href={n.href} icon={iconFor(n.icon)} isSelected={isActive(n.href)} />)}
+              </SideNavSection>
             ))}
-          </nav>
-          <div className="sidebar-foot">
-            <div style={{ fontWeight: 600 }}>{user.name}</div>
-            <div className="subtle">{ROLE_LABELS[user.role]}</div>
-            {orgs.length > 1 && <select className="select" style={{ marginTop: 8, height: 30, fontSize: 12 }} aria-label="Switch organisation" value={orgId} onChange={(e) => switchOrgAction(e.target.value)}>
-              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}{o.isDemo ? " (demo)" : ""}</option>)}
-            </select>}
-            <form action={logoutAction} style={{ marginTop: 8 }}><button className="btn btn-quiet btn-sm" style={{ paddingLeft: 0 }}><Icon name="logout" /> Sign out</button></form>
-          </div>
-        </aside>
-        <div className="main">
-          <header className="topbar">
-            <button className="btn btn-quiet icon-btn menu-toggle" aria-label="Open navigation" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="menu" /></button>
-            <button className="btn search-trigger" onClick={() => setPalette(true)} aria-label="Search (Ctrl+K)">
-              <Icon name="search" /> <span className="label-long">Search productions, scenes, people…</span><span className="spacer" /><kbd className="mono subtle">⌘K</kbd>
-            </button>
-            <div className="spacer" />
-            <ThemeToggle />
-            {user.isDemo && <span className="badge tone-warn" title="This organisation contains clearly labelled demonstration data, not imported source records.">Demo workspace</span>}
-          </header>
-          <main id="main" className="content" tabIndex={-1}>{children}</main>
-        </div>
+            <SideNavSection title="Bang On OS">
+              <SideNavItem label="Workspace home" href="/" icon={Home} />
+              <SideNavItem label="Settings" href="/workspace/settings" icon={Settings} />
+            </SideNavSection>
+          </SideNav>
+        }>
+        <header className="suite-top">
+          <button className="suite-search" onClick={() => setPalette(true)} aria-label="Search (Ctrl+K)">
+            <Search size={16} aria-hidden /><span className="label-long">Search productions, scenes, people…</span><span style={{ flex: 1 }} /><kbd>⌘K</kbd>
+          </button>
+          <span style={{ flex: 1 }} />
+          {user.isDemo && <span className="badge tone-warn" title="This organisation contains clearly labelled demonstration data, not imported source records.">Demo workspace</span>}
+        </header>
+        <main id="main" className="content suite-content" tabIndex={-1}>{children}</main>
+      </AppShell>
+      <Assistant />
       </div>
       <CommandPalette open={palette} onClose={() => setPalette(false)} nav={nav} />
       </OrgConfigProvider>

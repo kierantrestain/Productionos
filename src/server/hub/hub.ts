@@ -124,7 +124,7 @@ export function systemStatus() {
   const enc = (() => { const k = process.env.SECRET_ENCRYPTION_KEY; try { return !!k && Buffer.from(k, "base64").length === 32; } catch { return false; } })();
   const st = storageStatus();
   return [
-    { key: "ai", name: "AI (Claude)", ok: aiConfigured(), detail: aiConfigured() ? "Configured. AI fields, agents, planner and summaries are available." : "Not configured: an administrator must set ANTHROPIC_API_KEY. AI features are disabled until then." },
+    { key: "ai", name: "AI", ok: aiConfigured(), detail: (() => { const p = (process.env.AI_PROVIDER ?? "").toLowerCase(); if (!aiConfigured()) return p === "off" ? "Turned off by the administrator (AI_PROVIDER=off)." : "Not configured: set ANTHROPIC_API_KEY (Claude), or AI_PROVIDER=local with LOCAL_AI_BASE_URL and LOCAL_AI_MODEL for a private model on your own server."; return process.env.ANTHROPIC_API_KEY && p !== "local" ? "Claude (Anthropic). Prompts and the data they include are sent to Anthropic's API." : `Private model ${process.env.LOCAL_AI_MODEL ?? ""} at ${process.env.LOCAL_AI_BASE_URL}. Nothing is sent to a public AI service; web research is unavailable.`; })() },
     { key: "secrets", name: "Secret encryption", ok: enc, detail: enc ? "Configured. Sync credentials and SSO secrets can be stored encrypted." : "Not configured: set SECRET_ENCRYPTION_KEY (32 random bytes, base64). Airtable sync and SSO secrets are refused until then." },
     { key: "mail", name: "Email delivery", ok: mail.enabled, detail: mail.enabled ? `Provider: ${mail.provider}.` : `Not sending: ${mail.reason}. Messages are drafted and blocked, never sent.` },
     { key: "storage", name: "File storage", ok: st.durable, detail: st.note },

@@ -1,0 +1,89 @@
+# Bang On OS — self-hosted stack. Use ./install.sh for a guided setup, or:
+#   cp .env.selfhost.example .env   (fill in)   then   docker compose up -d
+# Optional profiles:  --profile files  (MinIO object storage)   --profile ai  (Ollama private AI)
+name: bangon
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bangon
+      POSTGRES_USER: bangon
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes: [db:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U bangon -d bangon"], interval: 5s, timeout: 5s, retries: 20 }
+
+  app:
+    build: .
+    image: bangon-os:latest
+    init: true
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://bangon:${POSTGRES_PASSWORD}@db:5432/bangon
+    volumes: [files:/app/data]
+    depends_on: { db: { condition: service_healthy } }
+    ports: ["127.0.0.1:${APP_PORT:-3000}:3000"]
+
+  # Automatic HTTPS (Let's Encrypt) in front of the app. DOMAIN=localhost gives a local certificate.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment: { DOMAIN: "${DOMAIN:-localhost}" }
+    ports: ["80:80", "443:443"]
+    volumes: ["./deploy/Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config"]
+    depends_on: [app]
+
+  # Background jobs every 5 minutes: automations, schedules, waits, syncs, outbox.
+  jobs:
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    env_file: .env
+    entrypoint: ["/bin/sh", "/jobs.sh"]
+    volumes: ["./deploy/jobs.sh:/jobs.sh:ro"]
+    depends_on: [app]
+
+  # Nightly database backup to ./backups, keeping BACKUP_KEEP_DAYS (default 14).
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    volumes: ["./deploy/backup.sh:/backup.sh:ro", "./backups:/backups"]
+    depends_on: { db: { condition: service_healthy } }
+
+  # --profile files: S3-compatible object storage for attachments (instead of storing files in Postgres).
+  minio:
+    profiles: [files]
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment: { MINIO_ROOT_USER: "${STORAGE_ACCESS_KEY_ID:-bangon}", MINIO_ROOT_PASSWORD: "${STORAGE_SECRET_ACCESS_KEY:-change-me-please}" }
+    volumes: [minio:/data]
+    healthcheck: { test: ["CMD", "mc", "ready", "local"], interval: 5s, timeout: 5s, retries: 20 }
+  minio-setup:
+    profiles: [files]
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    depends_on: { minio: { condition: service_healthy } }
+    entrypoint: ["/bin/sh", "-c", "mc alias set local http://minio:9000 \"$$U\" \"$$P\" && mc mb --ignore-existing local/$$B"]
+    environment: { U: "${STORAGE_ACCESS_KEY_ID:-bangon}", P: "${STORAGE_SECRET_ACCESS_KEY:-change-me-please}", B: "${STORAGE_BUCKET:-bangon-files}" }
+
+  # --profile ai: private AI on your own hardware (Ollama). Set AI_PROVIDER=local in .env.
+  ollama:
+    profiles: [ai]
+    image: ollama/ollama:0.6.8
+    restart: unless-stopped
+    volumes: [ollama:/root/.ollama]
+    # GPU (NVIDIA): uncomment
+    # deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: all, capabilities: [gpu] }] } } }
+  ollama-pull:
+    profiles: [ai]
+    image: ollama/ollama:0.6.8
+    depends_on: [ollama]
+    environment: { OLLAMA_HOST: "http://ollama:11434" }
+    entrypoint: ["/bin/sh", "-c", "sleep 3 && ollama pull \"${LOCAL_AI_MODEL:-qwen2.5:7b}\""]
+
+volumes: { db: {}, files: {}, caddy_data: {}, caddy_config: {}, minio: {}, ollama: {} }

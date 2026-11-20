@@ -19,8 +19,8 @@ import { invalid } from "../errors";
 
 const ISSUER = "https://auth.openai.com";
 const FALLBACK = { authorization_endpoint: `${ISSUER}/api/accounts/authorize`, token_endpoint: `${ISSUER}/api/accounts/oauth/token` };
-export const chatgptConfigured = () => Boolean(process.env.OPENAI_SIWC_CLIENT_ID) && secretsConfigured();
-export const chatgptStatusReason = () => !process.env.OPENAI_SIWC_CLIENT_ID ? "Sign in with ChatGPT needs an OpenAI-issued client ID (OPENAI_SIWC_CLIENT_ID). OpenAI currently offers it to selected partners." : !secretsConfigured() ? "Set SECRET_ENCRYPTION_KEY so ChatGPT tokens can be stored encrypted." : null;
+export const chatgptConfigured = () => Boolean(process.env.OPENAI_SIWC_CLIENT_ID) && secretsConfigured() && (process.env.AI_PROVIDER ?? "").toLowerCase() !== "local";
+export const chatgptStatusReason = () => (process.env.AI_PROVIDER ?? "").toLowerCase() === "local" ? "This workspace uses private AI only, so connecting a public ChatGPT plan is turned off." : !process.env.OPENAI_SIWC_CLIENT_ID ? "Sign in with ChatGPT needs an OpenAI-issued client ID (OPENAI_SIWC_CLIENT_ID). OpenAI currently offers it to selected partners." : !secretsConfigured() ? "Set SECRET_ENCRYPTION_KEY so ChatGPT tokens can be stored encrypted." : null;
 type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 let fetcher: Fetcher = (u, i) => fetch(u, i);
 export function __setChatgptFetcher(f: Fetcher | null) { fetcher = f ?? ((u, i) => fetch(u, i)); }
@@ -92,6 +92,7 @@ export async function disconnectChatgpt(ctx: Ctx) {
 
 /** One Responses API call on the person's ChatGPT plan. Limits and errors come back from OpenAI unchanged. */
 export async function chatgptResponses(ctx: Pick<Ctx, "orgId" | "userId">, body: Record<string, unknown>) {
+  if ((process.env.AI_PROVIDER ?? "").toLowerCase() === "local") throw invalid("This workspace uses private AI only; ChatGPT plans are turned off.");
   const token = await accessToken(ctx);
   const base = (process.env.OPENAI_SIWC_API_BASE || "https://api.openai.com/v1").replace(/\/$/, "");
   const r = await fetcher(`${base}/responses`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ model: process.env.OPENAI_SIWC_MODEL || "gpt-5", ...body }), signal: AbortSignal.timeout(120_000) });

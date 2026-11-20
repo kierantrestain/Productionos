@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Grid2x2, Home, Inbox, LayoutTemplate, Search, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { myWorkCountsAction } from "@/app/hub-actions";
 import { openCommandPalette, CommandPalette } from "./command-palette";
 import { Assistant } from "@/components/hub/assistant";
 
@@ -21,7 +20,7 @@ export function useWorkCounts() {
     try { cached = JSON.parse(sessionStorage.getItem("bangon:work") ?? "null"); } catch { /* storage blocked */ }
     if (cached && Date.now() - cached.at < 60_000) { setC(cached.c); return; }
     let since: string | undefined; try { since = localStorage.getItem(SEEN) ?? undefined; } catch { /* ignore */ }
-    inflight ??= myWorkCountsAction(since).then((r) => { inflight = null; if (!r.ok) return null; try { sessionStorage.setItem("bangon:work", JSON.stringify({ at: Date.now(), c: r.data })); } catch { /* ignore */ } return r.data; });
+    inflight ??= fetch(`/api/hub/counts${since ? `?since=${encodeURIComponent(since)}` : ""}`).then((r) => (r.ok ? r.json() : null)).then((data: Counts | null) => { inflight = null; if (!data) return null; try { sessionStorage.setItem("bangon:work", JSON.stringify({ at: Date.now(), c: data })); } catch { /* ignore */ } return data; }).catch(() => { inflight = null; return null; });
     inflight.then((v) => v && setC(v));
   }, []);
   return c;
