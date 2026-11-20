@@ -13,14 +13,14 @@ const GROUPS: Record<string, string> = { basic: "Basic", choice: "Choices", date
 const inp: React.CSSProperties = { width: "100%", height: 34, border: "1px solid var(--color-border)", borderRadius: 6, background: "var(--color-background-surface)", color: "var(--color-text-primary)", font: "inherit", padding: "0 10px" };
 const lbl: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 600, color: "var(--color-text-secondary)", margin: "12px 0 4px" };
 
-export function FieldDialog({ data, field, afterFieldId, onClose, onSaved, initialType, initialLinkTableId }: { data: BaseData; field: ClientField | null; afterFieldId?: string; onClose: () => void; onSaved: () => void; initialType?: FieldType; initialLinkTableId?: string }) {
+export function FieldDialog({ data, field, afterFieldId, onClose, onSaved, initialType, initialLinkTableId, initialOptions }: { data: BaseData; field: ClientField | null; afterFieldId?: string; onClose: () => void; onSaved: () => void; initialType?: FieldType; initialLinkTableId?: string; initialOptions?: FieldOptions }) {
   const editing = !!field;
   const tableFields = data.baseFields.filter((f) => f.tableId === data.table.id);
   const [name, setName] = useState(field?.name ?? (initialLinkTableId ? data.tables.find((t) => t.id === initialLinkTableId)?.name ?? "" : ""));
   const [type, setType] = useState<FieldType>(field?.type ?? initialType ?? "singleLineText");
   const [description, setDescription] = useState(field?.description ?? "");
   const [o, setO] = useState<FieldOptions>(() => {
-    const opts: FieldOptions = { ...(field?.options ?? {}), ...(!field && initialLinkTableId ? { linkedTableId: initialLinkTableId } : {}) };
+    const opts: FieldOptions = { ...(field?.options ?? {}), ...(!field && initialLinkTableId ? { linkedTableId: initialLinkTableId } : {}), ...(!field ? initialOptions ?? {} : {}) };
     if (opts.formula) opts.formula = toDisplay(opts.formula, data.baseFields);
     return opts;
   });
@@ -41,6 +41,7 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved, initi
   const risky = editing && (type !== field!.type || removedChoices);
   const save = async () => {
     setErr("");
+    if (type === "aiText" && o.aiMode === "analyze" && !o.sourceFieldId) { setErr("Choose the attachment field the AI should read."); return; }
     const options: FieldOptions = { ...o };
     if (type === "singleSelect" || type === "multipleSelects") options.choices = choices.filter((c) => c.name.trim());
     if (risky && !impact) {
@@ -135,6 +136,18 @@ export function FieldDialog({ data, field, afterFieldId, onClose, onSaved, initi
       )}
       {type === "aiText" && (
         <>
+          <label style={lbl} htmlFor="fd-aimode">What the AI does</label>
+          <select id="fd-aimode" style={inp} value={o.aiMode ?? "text"} onChange={(e) => set({ aiMode: e.target.value as FieldOptions["aiMode"] })}>
+            <option value="text">Write text from other fields</option>
+            <option value="analyze">Analyse attachments (images and PDFs)</option>
+            <option value="research">Research with web search</option>
+          </select>
+          {o.aiMode === "analyze" && <>
+            <label style={lbl} htmlFor="fd-src">Attachment field to read</label>
+            <select id="fd-src" style={inp} value={o.sourceFieldId ?? ""} onChange={(e) => set({ sourceFieldId: e.target.value || undefined })}><option value="">Choose…</option>{tableFields.filter((f) => f.type === "attachment").map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</select>
+            {!tableFields.some((f) => f.type === "attachment") && <p style={{ fontSize: 12, color: "var(--color-text-orange)" }}>This table has no attachment field yet. Add one first.</p>}
+          </>}
+          {o.aiMode === "research" && <p style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Claude can search the web for current facts before answering. Results can be wrong — check before relying on them.</p>}
           <label style={lbl} htmlFor="fd-prompt">Prompt</label>
           <textarea id="fd-prompt" className="p-textarea" rows={4} value={o.prompt ?? ""} onChange={(e) => set({ prompt: e.target.value })} placeholder="Write a one-line logline for {Name}, a {Genre} project, using {Notes}." />
           <p style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>Reference fields with {"{Field name}"}. Text is generated on request per record (sparkle button, or the field menu → Generate). {data.aiConfigured ? "" : "AI isn't configured for this workspace yet."}</p>

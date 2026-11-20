@@ -133,6 +133,39 @@ export async function generateAiText(prompt: string): Promise<string> {
   return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim().slice(0, 10000);
 }
 
+/**
+ * AI field actions beyond plain text:
+ *  - analyze: Claude reads the record's attachments (images and PDFs) alongside the prompt.
+ *  - research: Claude may search the web (server-side web search tool) before answering.
+ * Image/video generation is not offered: Claude doesn't generate media, and we don't fake it.
+ */
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+export type AiFile = { type: string; bytes: Buffer; name: string };
+export async function generateAiCell(prompt: string, mode: "text" | "analyze" | "research" = "text", files: AiFile[] = []): Promise<string> {
+  if (mode === "text") return generateAiText(prompt);
+  const system = "You fill a single cell in a database. Reply with only the cell's content — no preamble, no markdown headings. Be factual; if something can't be determined, say so briefly.";
+  if (mode === "analyze") {
+    const usable = files.filter((f) => (IMAGE_TYPES.includes(f.type) || f.type === "application/pdf") && f.bytes.length <= 5 * 1024 * 1024).slice(0, 4);
+    if (!usable.length) return "No readable attachment (images or PDFs up to 5 MB).";
+    const content: Anthropic.ContentBlockParam[] = usable.map((f) => f.type === "application/pdf"
+      ? { type: "document", source: { type: "base64", media_type: "application/pdf", data: f.bytes.toString("base64") }, title: f.name }
+      : { type: "image", source: { type: "base64", media_type: f.type as "image/png", data: f.bytes.toString("base64") } });
+    content.push({ type: "text", text: prompt });
+    const res = await client().messages.create({ model: MODEL, max_tokens: 2000, output_config: { effort: "low" }, system, messages: [{ role: "user", content }] });
+    guard(res);
+    return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim().slice(0, 10000);
+  }
+  // research: server-side web search; continue while the server pauses a long turn.
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
+  for (let i = 0; i < 4; i++) {
+    const res = await client().messages.create({ model: MODEL, max_tokens: 4000, system: `${system} Use web search when the answer depends on current or external facts, and keep the answer short.`, messages, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 4 }] });
+    if (res.stop_reason === "pause_turn") { messages.push({ role: "assistant", content: res.content }); continue; }
+    guard(res);
+    return res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("").trim().slice(0, 10000);
+  }
+  throw invalid("The research took too long. Try a narrower prompt.");
+}
+
 // ───────────── 3. Natural-language filters ─────────────
 const FilterSchema = z.object({
   conjunction: z.enum(["and", "or"]),

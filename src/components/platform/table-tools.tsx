@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Check, ChevronRight, Eye, EyeOff, FileSpreadsheet, Database, Link2, Plus, RefreshCw, Search, Sparkles, Table2 } from "lucide-react";
-import { FIELD_META, FIELD_TYPES, type FieldType } from "@/lib/platform/fields";
+import { GripVertical, Check, ChevronRight, Eye, EyeOff, FileSpreadsheet, Database, Link2, Plus, RefreshCw, Search, Sparkles, Table2, ScanEye, Globe } from "lucide-react";
+import { FIELD_META, FIELD_TYPES, type FieldOptions, type FieldType } from "@/lib/platform/fields";
 import { FieldIcon } from "./icons";
 
 /** Small anchored popover: closes on outside click and Escape, stays inside the viewport. */
@@ -28,20 +28,29 @@ function SearchBox({ value, onChange, placeholder, onEnter }: { value: string; o
 }
 
 /** All tables: search, jump, hide/show from the tab bar (per person, this browser), add a table. */
-export function TableSwitcher({ anchor, tables, currentId, hidden, onToggleHidden, onPick, onAdd, onClose }: {
+export function TableSwitcher({ anchor, tables, currentId, hidden, onToggleHidden, onPick, onAdd, onClose, onReorder }: {
   anchor: DOMRect; tables: { id: string; name: string }[]; currentId: string; hidden: Set<string>;
   onToggleHidden: (id: string) => void; onPick: (id: string) => void; onAdd?: (r: DOMRect) => void; onClose: () => void;
+  /** Present when the person may reorder tables: called with the full new order. */
+  onReorder?: (ids: string[]) => void;
 }) {
   const [q, setQ] = useState("");
-  const list = tables.filter((t) => t.name.toLowerCase().includes(q.toLowerCase()));
+  const [order, setOrder] = useState(tables);
+  const [drag, setDrag] = useState<string | null>(null);
+  const list = order.filter((t) => t.name.toLowerCase().includes(q.toLowerCase()));
+  const canDrag = !!onReorder && !q;
+  const move = (id: string, to: number) => { const cur = order.findIndex((t) => t.id === id); if (cur < 0 || to < 0 || to >= order.length || cur === to) return; const n = [...order]; const [x] = n.splice(cur, 1); n.splice(to, 0, x); setOrder(n); onReorder?.(n.map((t) => t.id)); };
   return (
     <Popover anchor={anchor} onClose={onClose} width={340} label="All tables">
       <SearchBox value={q} onChange={setQ} placeholder="Find a table" onEnter={() => list[0] && onPick(list[0].id)} />
       <ul className="tt-list" role="listbox" aria-label="Tables">
         {list.map((t) => (
-          <li key={t.id} role="option" aria-selected={t.id === currentId} className={t.id === currentId ? "on" : ""}>
+          <li key={t.id} role="option" aria-selected={t.id === currentId} className={`${t.id === currentId ? "on" : ""} ${drag === t.id ? "tt-dragging" : ""}`}
+            draggable={canDrag} onDragStart={() => setDrag(t.id)} onDragEnd={() => setDrag(null)} onDragOver={(e) => { if (drag) e.preventDefault(); }}
+            onDrop={(e) => { e.preventDefault(); if (drag && drag !== t.id) move(drag, order.findIndex((x) => x.id === t.id)); setDrag(null); }}>
             <button type="button" className="tt-row" onClick={() => onPick(t.id)}><span className="tt-check">{t.id === currentId && <Check size={14} />}</span><span className={hidden.has(t.id) ? "tt-dim" : ""}>{t.name}</span></button>
             <button type="button" className="tt-icon" aria-label={hidden.has(t.id) ? `Show ${t.name} in the tab bar` : `Hide ${t.name} from the tab bar`} title={hidden.has(t.id) ? "Show in tab bar" : "Hide from tab bar"} onClick={() => onToggleHidden(t.id)} disabled={t.id === currentId && !hidden.has(t.id)}>{hidden.has(t.id) ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+            {canDrag && <button type="button" className="tt-icon tt-grip" aria-label={`Move ${t.name} (Alt+↑/↓)`} title="Drag to reorder, or Alt+↑ / Alt+↓" onKeyDown={(e) => { if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) { e.preventDefault(); move(t.id, order.findIndex((x) => x.id === t.id) + (e.key === "ArrowUp" ? -1 : 1)); } }}><GripVertical size={14} /></button>}
           </li>
         ))}
         {!list.length && <li className="tt-empty">No table matches “{q}”.</li>}
@@ -75,7 +84,7 @@ const CATS: [string, FieldType[]][] = [
 ];
 
 /** Pick a field type first (searchable), then the field dialog opens pre-set to it. */
-export function FieldTypePicker({ anchor, onClose, onPick, tables, aiConfigured }: { anchor: DOMRect; onClose: () => void; onPick: (t: FieldType, linkTableId?: string) => void; tables: { id: string; name: string }[]; aiConfigured: boolean }) {
+export function FieldTypePicker({ anchor, onClose, onPick, tables, aiConfigured }: { anchor: DOMRect; onClose: () => void; onPick: (t: FieldType, linkTableId?: string, preset?: FieldOptions) => void; tables: { id: string; name: string }[]; aiConfigured: boolean }) {
   const [q, setQ] = useState(""); const [linkOpen, setLinkOpen] = useState(false);
   const n = q.trim().toLowerCase();
   const match = (t: FieldType) => !n || `${FIELD_META[t].label} ${FIELD_META[t].description}`.toLowerCase().includes(n);
@@ -84,8 +93,15 @@ export function FieldTypePicker({ anchor, onClose, onPick, tables, aiConfigured 
     <Popover anchor={anchor} onClose={onClose} width={400} label="Add a field">
       <SearchBox value={q} onChange={setQ} placeholder="Find a field type" onEnter={() => all[0] && onPick(all[0])} />
       <div className="tt-scroll">
-        {(!n || match("aiText")) && <><div className="tt-sect">AI</div>
-          <button type="button" className="tt-item" onClick={() => onPick("aiText")}><Sparkles size={15} /><span>Generate text with AI</span>{!aiConfigured && <em>needs AI key</em>}</button></>}
+        {(() => {
+          const ai: [string, React.ReactNode, FieldOptions, string][] = [
+            ["Generate text with AI", <Sparkles key="t" size={15} />, { aiMode: "text", prompt: "" }, "write summarise draft generate text"],
+            ["Analyse attachment", <ScanEye key="a" size={15} />, { aiMode: "analyze", prompt: "Describe what this file shows and pull out the key details." }, "analyse analyze attachment image pdf vision read document"],
+            ["Research with web search", <Globe key="r" size={15} />, { aiMode: "research", prompt: "Research {Name} and summarise what they do in two sentences." }, "research web search companies people find online"],
+          ];
+          const shown = ai.filter(([l, , , k]) => !n || `${l} ${k}`.toLowerCase().includes(n));
+          return shown.length ? <><div className="tt-sect">AI</div>{shown.map(([l, i, preset]) => <button key={l} type="button" className="tt-item" onClick={() => onPick("aiText", undefined, preset)}>{i}<span>{l}</span>{!aiConfigured && <em>needs AI key</em>}</button>)}</> : null;
+        })()}
         {match("link") && <>
           <button type="button" className="tt-item" aria-expanded={linkOpen} onClick={() => setLinkOpen((o) => !o)}><Link2 size={15} /><span>Link to another record</span><ChevronRight size={15} style={{ marginLeft: "auto", transform: linkOpen ? "rotate(90deg)" : undefined }} /></button>
           {linkOpen && <div className="tt-sub">{tables.map((t) => <button key={t.id} type="button" className="tt-item" onClick={() => onPick("link", t.id)}><Table2 size={14} /><span>{t.name}</span></button>)}</div>}

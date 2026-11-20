@@ -57,6 +57,9 @@ export async function previewFieldChangeAction(fieldId: string, patch: { type?: 
 export async function archiveFieldAction(fieldId: string) {
   return toResult(async () => { await S.archiveField(await requireContext(), fieldId); done(); });
 }
+export async function reorderTablesAction(baseId: string, ids: string[]) {
+  return toResult(async () => { await S.reorderTables(await requireContext(), baseId, ids); done(); });
+}
 export async function reorderFieldsAction(tableId: string, ids: string[]) {
   return toResult(async () => { await S.reorderFields(await requireContext(), tableId, ids); done(); });
 }
@@ -178,7 +181,8 @@ export async function aiCreateFromSpecAction(spec: import("@/server/platform/spe
 export async function aiFillFieldAction(fieldId: string, recordIds: string[]) {
   return toResult(async () => {
     const ctx = await requireContext();
-    const { generateAiText, renderPrompt } = await import("@/server/platform/ai");
+    const { generateAiCell, renderPrompt } = await import("@/server/platform/ai");
+    const { readRecordAttachment } = await import("@/server/platform/attachments");
     const { db } = await import("@/db");
     const { baseFields } = await import("@/db/schema");
     const { eq } = await import("drizzle-orm");
@@ -188,7 +192,13 @@ export async function aiFillFieldAction(fieldId: string, recordIds: string[]) {
     const r = await runView(ctx, access.role, field.tableId, {}, { recordIds: recordIds.slice(0, 25) });
     const lite = r.fields.map((f) => ({ ...f, options: f.options ?? {} }));
     const cells: { recordId: string; fieldId: string; value: unknown }[] = [];
-    for (const row of r.rows) cells.push({ recordId: row.id, fieldId, value: await generateAiText(renderPrompt(field.options.prompt, lite as never, row.values)) });
+    const mode = field.options.aiMode ?? "text";
+    for (const row of r.rows) {
+      const files = mode === "analyze" && field.options.sourceFieldId
+        ? await Promise.all(((row.values[field.options.sourceFieldId] as { id: string }[] | null) ?? []).slice(0, 4).map(async (a) => { const f = await readRecordAttachment(ctx, a.id); return { type: f.meta.contentType, bytes: f.bytes, name: f.meta.filename }; }))
+        : [];
+      cells.push({ recordId: row.id, fieldId, value: await generateAiCell(renderPrompt(field.options.prompt, lite as never, row.values), mode, files) });
+    }
     await R.updateCells(ctx, cells);
     return cells.length;
   });

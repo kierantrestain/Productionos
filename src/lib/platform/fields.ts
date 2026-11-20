@@ -31,6 +31,8 @@ export interface FieldOptions {
   formula?: string;                       // formula (stored with {fld_id} references)
   resultType?: "text" | "number" | "date" | "boolean";
   prompt?: string;                        // aiText: prompt template with {Field} refs
+  aiMode?: "text" | "analyze" | "research"; // aiText: plain text, read attachments (vision), or research the web
+  sourceFieldId?: string;                 // aiText analyze: the attachment field to read
   label?: string; url?: string;           // button
   action?: "open_url" | "update_record" | "run_automation"; values?: Record<string, unknown>; automationId?: string; // button
 }

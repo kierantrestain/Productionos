@@ -130,6 +130,13 @@ test.describe.serial("usability", () => {
     await page.keyboard.press("Enter");
     await page.waitForURL(/\/base\/[^/]+\/[^/]+\/[^/?]+/); // base → table → view resolved
     await expect(page.getByRole("navigation", { name: "Base sections" })).toBeVisible();
+    // quick add: "<Table>: text" creates the record and opens it
+    const table = (await page.getByRole("navigation", { name: "Tables" }).locator("[aria-current=page]").innerText()).trim();
+    await page.keyboard.press("Control+k");
+    await page.getByRole("combobox", { name: "Search" }).fill(`${table}: Quick add E2E`);
+    await page.getByRole("option", { name: new RegExp(`^Add “Quick add E2E” to ${table}`) }).first().click(); // current base ranks first
+    await page.waitForURL(/record=/);
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Control+k");
     await page.getByRole("combobox", { name: "Search" }).fill("settings");
     await page.getByRole("option", { name: /^Settings/ }).click();
@@ -166,6 +173,8 @@ test.describe.serial("usability", () => {
     // field-type picker → dialog pre-set to the chosen type → field created
     await page.getByRole("button", { name: "Add field" }).click();
     const pick = page.getByRole("dialog", { name: "Add a field" });
+    await expect(pick.getByRole("button", { name: /Analyse attachment/ })).toBeVisible();
+    await expect(pick.getByRole("button", { name: /Research with web search/ })).toBeVisible();
     await pick.getByPlaceholder("Find a field type").fill("curr");
     await pick.getByRole("button", { name: "Currency" }).click();
     await expect(page.locator("#fd-type")).toHaveValue("currency");

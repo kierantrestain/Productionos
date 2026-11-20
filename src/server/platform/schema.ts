@@ -152,6 +152,7 @@ export function normaliseOptions(type: FieldType, o: FieldOptions): FieldOptions
     out.choices = (o.choices ?? []).filter((c) => c && String(c.name ?? "").trim()).map((c, i) => ({ id: c.id || newChoiceId(), name: String(c.name).trim().slice(0, 100), color: (COLORS.includes(c.color) ? c.color : COLORS[i % COLORS.length]) as SelectChoice["color"] }))
       .filter((c) => !seen.has(c.name) && !!seen.add(c.name));
   }
+  if (type === "aiText") { out.aiMode = o.aiMode === "analyze" || o.aiMode === "research" ? o.aiMode : "text"; if (out.aiMode !== "analyze") delete out.sourceFieldId; }
   if (type === "rating") out.max = Math.min(Math.max(o.max ?? 5, 1), 10);
   if (["number", "currency", "percent"].includes(type)) out.precision = Math.min(Math.max(o.precision ?? (type === "currency" ? 2 : 0), 0), 8);
   if (type === "currency") out.symbol = (o.symbol ?? "£").slice(0, 4);
@@ -336,6 +337,13 @@ export async function archiveField(ctx: Ctx, fieldId: string) {
 export async function reorderFields(ctx: Ctx, tableId: string, orderedIds: string[]) {
   const { access } = await tableContext(ctx, tableId); requireRole(access, "creator", "reorder fields");
   await db.transaction(async (tx) => { for (const [i, id] of orderedIds.entries()) await tx.update(baseFields).set({ sortOrder: i * 2 }).where(and(eq(baseFields.id, id), eq(baseFields.tableId, tableId))); });
+}
+
+/** Reorder a base's tables (creator and up). Ids not in the base are ignored. */
+export async function reorderTables(ctx: Ctx, baseId: string, orderedIds: string[]) {
+  const a = await baseAccess(ctx, baseId); requireRole(a, "creator", "reorder tables");
+  await db.transaction(async (tx) => { for (const [i, id] of orderedIds.slice(0, 500).entries()) await tx.update(baseTables).set({ sortOrder: i }).where(and(eq(baseTables.id, id), eq(baseTables.baseId, baseId))); });
+  await audit(db, ctx, "reorder_tables", "bases", baseId, { meta: { count: orderedIds.length } });
 }
 
 // ───────────── Views ─────────────

@@ -1,11 +1,13 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Inbox, ShieldCheck, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { markMentionsSeen } from "./rail";
+import { AlertTriangle, AtSign, CalendarClock, CheckCircle2, Clock, Inbox, ShieldCheck, UserRound } from "lucide-react";
 import type { WorkItem } from "@/server/hub/hub";
 import { HEAD_BG } from "@/components/platform/base-header";
 
-type Data = { items: WorkItem[]; counts: Record<"overdue" | "today" | "soon" | "assigned" | "approvals", number>; approvals: { id: string; baseId: string; baseName: string; summary: string; kind: string; source: string; createdAt: string }[]; recentBases: { id: string; name: string; color: string }[]; scannedTables: number };
+type Mention = { id: string; baseId: string; baseName: string; color: string; tableId: string; tableName: string; recordId: string; record: string; author: string; body: string; createdAt: string };
+type Data = { items: WorkItem[]; mentions: Mention[]; counts: Record<"overdue" | "today" | "soon" | "assigned" | "approvals" | "mentions", number>; approvals: { id: string; baseId: string; baseName: string; summary: string; kind: string; source: string; createdAt: string }[]; recentBases: { id: string; name: string; color: string }[]; scannedTables: number };
 const fmt = (d?: string) => d ? new Date(`${d}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "";
 const greet = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening"; };
 const TABS = [
@@ -21,10 +23,11 @@ export function MyWorkView({ name, data }: { name: string; data: Data }) {
   const list = useMemo(() => data.items.filter(TABS.find((t) => t.key === tab)!.match), [data.items, tab]);
   const groups = useMemo(() => { const m = new Map<string, WorkItem[]>(); for (const i of list) { const k = `${i.baseName} › ${i.tableName}`; m.set(k, [...(m.get(k) ?? []), i]); } return [...m.entries()]; }, [list]);
   const c = data.counts;
+  useEffect(() => { markMentionsSeen(); }, []);
   return (
     <div className="mw">
       <header className="mw-head">
-        <div><h1>{greet()}, {name}</h1><p>{c.overdue + c.today + c.approvals ? `${c.overdue} overdue, ${c.today} due today and ${c.approvals} approval${c.approvals === 1 ? "" : "s"} waiting on you.` : "Nothing urgent. Here's what's coming up."}</p></div>
+        <div><h1>{greet()}, {name}</h1><p>{c.overdue + c.today + c.approvals ? `${c.overdue} overdue, ${c.today} due today and ${c.approvals} approval${c.approvals === 1 ? "" : "s"} waiting on you.` : "Nothing urgent. Here's what's coming up."}{c.mentions ? ` ${c.mentions} mention${c.mentions === 1 ? "" : "s"} in the last 30 days.` : ""}</p></div>
       </header>
       <div className="mw-stats">
         <Stat icon={<AlertTriangle size={18} />} tone="red" label="Overdue" n={c.overdue} onClick={() => setTab("focus")} />
@@ -58,6 +61,11 @@ export function MyWorkView({ name, data }: { name: string; data: Data }) {
           ))}
         </section>
         <aside className="mw-side">
+          <section aria-label="Mentions" className="mw-card">
+            <h2><AtSign size={15} />Mentions</h2>
+            {!data.mentions.length && <p className="mw-muted">When someone @mentions you in a record comment, it shows up here.</p>}
+            <ul>{data.mentions.slice(0, 8).map((m) => <li key={m.id}><Link href={`/base/${m.baseId}/${m.tableId}?record=${m.recordId}`}><strong>{m.author} on “{m.record}”</strong><span className="mw-quote">{m.body}</span><span>{m.tableName} · {m.baseName} · {new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></Link></li>)}</ul>
+          </section>
           <section id="approvals" aria-label="Approvals waiting on you" className="mw-card">
             <h2><ShieldCheck size={15} />Waiting for your approval</h2>
             {!data.approvals.length && <p className="mw-muted">No pending approvals. Agent and automation actions that leave the workspace wait here for a person to approve.</p>}

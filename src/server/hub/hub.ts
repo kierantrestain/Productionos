@@ -6,9 +6,9 @@
  *  - systemStatus: honest, server-computed status of each integration (never claims "live" without config).
  * All reads go through the same permission layer as the bases themselves.
  */
-import { and, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { baseApprovals, baseRecords, baseTables, users } from "@/db/schema";
+import { baseApprovals, baseRecords, baseTables, recordComments, users } from "@/db/schema";
 import type { Ctx } from "../auth/context";
 import { audit } from "../audit";
 import { invalid } from "../errors";
@@ -16,6 +16,7 @@ import { hashPassword, verifyPassword } from "../auth/password";
 import { atLeast } from "../platform/access";
 import { loadBaseStructure, listBases } from "../platform/schema";
 import { runView } from "../platform/query";
+import { createRecords } from "../platform/records";
 import { cellText } from "@/lib/platform/cell-text";
 import { listApps } from "../apps/apps";
 import { aiConfigured } from "../platform/ai";
@@ -26,7 +27,7 @@ export type WorkItem = { baseId: string; baseName: string; color: string; tableI
 const DONE = /\b(done|complete|completed|won|lost|closed|delivered|paid|cancel+ed|archived|wrapped|approved|rejected|shipped)\b/i;
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
-export async function myWork(ctx: Ctx, opts: { maxTables?: number } = {}) {
+export async function myWork(ctx: Ctx, opts: { maxTables?: number; mentionsSince?: Date } = {}) {
   const now = new Date(); const today = day(now); const week = day(new Date(now.getTime() + 7 * 864e5));
   const bases = (await listBases(ctx)).slice(0, 20);
   const items: WorkItem[] = []; let scanned = 0; const max = opts.maxTables ?? 40;
@@ -63,17 +64,26 @@ export async function myWork(ctx: Ctx, opts: { maxTables?: number } = {}) {
   const deciders = bases.filter((b) => atLeast(b.role, "creator"));
   const approvals = deciders.length ? await db.select().from(baseApprovals).where(and(eq(baseApprovals.orgId, ctx.orgId), eq(baseApprovals.status, "pending"), inArray(baseApprovals.baseId, deciders.map((b) => b.id)))).limit(50) : [];
   const baseName = new Map(bases.map((b) => [b.id, b]));
+  // Mentions: comments in the last 30 days that @mention me, on records in bases I can open.
+  const ments = bases.length ? await db.select({ id: recordComments.id, body: recordComments.body, createdAt: recordComments.createdAt, recordId: recordComments.recordId, author: users.name, tableId: baseTables.id, tableName: baseTables.name, baseId: baseTables.baseId, primaryFieldId: baseTables.primaryFieldId, data: baseRecords.data })
+    .from(recordComments).innerJoin(baseRecords, eq(baseRecords.id, recordComments.recordId)).innerJoin(baseTables, eq(baseTables.id, baseRecords.tableId)).leftJoin(users, eq(users.id, recordComments.createdBy))
+    .where(and(eq(recordComments.orgId, ctx.orgId), isNull(recordComments.deletedAt), sql`${recordComments.mentions} @> ${JSON.stringify([ctx.userId])}::jsonb`, gte(recordComments.createdAt, new Date(now.getTime() - 30 * 864e5)), inArray(baseTables.baseId, bases.map((b) => b.id)), isNull(baseTables.archivedAt)))
+    .orderBy(desc(recordComments.createdAt)).limit(50) : [];
+  const mentions = ments.map((m) => ({ id: m.id, baseId: m.baseId, baseName: baseName.get(m.baseId)?.name ?? "", color: baseName.get(m.baseId)?.color ?? "blue", tableId: m.tableId, tableName: m.tableName, recordId: m.recordId,
+    record: String((m.primaryFieldId && m.data[m.primaryFieldId]) ?? "Unnamed"), author: m.author ?? "Someone", body: m.body.replace(/@\[([^\]]+)\]\([0-9a-f-]{36}\)/g, "@$1").slice(0, 280), createdAt: m.createdAt.toISOString() }));
+  const newMentions = opts.mentionsSince ? ments.filter((m) => m.createdAt > opts.mentionsSince!).length : 0;
   return {
+    mentions,
     items: items.slice(0, 200),
-    counts: { overdue: items.filter((i) => i.reason === "overdue").length, today: items.filter((i) => i.reason === "today").length, soon: items.filter((i) => i.reason === "soon").length, assigned: items.filter((i) => i.reason === "assigned").length, approvals: approvals.length },
+    counts: { overdue: items.filter((i) => i.reason === "overdue").length, today: items.filter((i) => i.reason === "today").length, soon: items.filter((i) => i.reason === "soon").length, assigned: items.filter((i) => i.reason === "assigned").length, approvals: approvals.length, mentions: mentions.length, newMentions },
     approvals: approvals.map((a) => ({ id: a.id, baseId: a.baseId, baseName: baseName.get(a.baseId)?.name ?? "", summary: a.summary, kind: a.kind, source: a.source, createdAt: a.createdAt.toISOString() })),
     recentBases: [...bases].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()).slice(0, 6).map((b) => ({ id: b.id, name: b.name, color: b.color, icon: b.icon })),
     scannedTables: scanned,
   };
 }
 
-export type SearchHit = { kind: "base" | "table" | "app" | "record"; id: string; title: string; subtitle: string; href: string; color?: string };
-export async function searchEverything(ctx: Ctx, q: string): Promise<SearchHit[]> {
+export type SearchHit = { kind: "base" | "table" | "app" | "record" | "create"; id: string; title: string; subtitle: string; href: string; color?: string; text?: string };
+export async function searchEverything(ctx: Ctx, q: string, currentBaseId?: string): Promise<SearchHit[]> {
   const term = q.trim(); if (term.length < 1) return [];
   const n = term.toLowerCase();
   const bases = await listBases(ctx);
@@ -93,7 +103,17 @@ export async function searchEverything(ctx: Ctx, q: string): Promise<SearchHit[]
     const tmap = new Map(searchable.map((t) => [t.id, t]));
     for (const r of rows) { const t = tmap.get(r.tableId)!; out.push({ kind: "record", id: r.id, title: String(r.data[t.primaryFieldId!] ?? "Unnamed"), subtitle: `${t.name} · ${bmap.get(t.baseId)?.name}`, href: `/base/${t.baseId}/${t.id}?record=${r.id}`, color: bmap.get(t.baseId)?.color }); }
   }
-  const score = (h: SearchHit) => (h.title.toLowerCase() === n ? 0 : h.title.toLowerCase().startsWith(n) ? 1 : 2) + ({ base: 0, app: 0.1, table: 0.2, record: 0.3 })[h.kind];
+  // Quick add: "Tasks: call Horizon Friday" → offer to create that record in matching tables I can edit.
+  const qa = term.match(/^([^:]{2,60}):\s*(.{1,500})$/);
+  if (qa) {
+    const tn = qa[1].trim().toLowerCase();
+    const cands = tables.filter((x) => x.primaryFieldId && atLeast(bmap.get(x.baseId)!.role, "editor") && x.name.toLowerCase().startsWith(tn))
+      .sort((a, b) => Number(b.baseId === currentBaseId) - Number(a.baseId === currentBaseId)).slice(0, 4).reverse();
+    for (const t of cands)
+      out.unshift({ kind: "create", id: t.id, title: `Add “${qa[2].trim()}” to ${t.name}`, subtitle: `New record in ${bmap.get(t.baseId)?.name}`, href: `/base/${t.baseId}/${t.id}`, color: bmap.get(t.baseId)?.color, text: qa[2].trim() });
+    if (out[0]?.kind === "create") return out.slice(0, 30);
+  }
+  const score = (h: SearchHit) => (h.title.toLowerCase() === n ? 0 : h.title.toLowerCase().startsWith(n) ? 1 : 2) + ({ base: 0, app: 0.1, table: 0.2, record: 0.3, create: -1 })[h.kind];
   return out.sort((a, b) => score(a) - score(b)).slice(0, 30);
 }
 
@@ -121,4 +141,13 @@ export async function changePassword(ctx: Ctx, current: string, next: string) {
   if (!u || !(await verifyPassword(current, u.passwordHash))) throw invalid("Your current password is incorrect.");
   await db.update(users).set({ passwordHash: await hashPassword(next) }).where(eq(users.id, ctx.userId));
   await audit(db, ctx, "change_password", "users", ctx.userId, {});
+}
+
+/** Quick add from search: creates a record with the primary field set; normal permissions and automations apply. */
+export async function quickAdd(ctx: Ctx, tableId: string, text: string) {
+  const v = text.trim(); if (!v) throw invalid("Type what to add.");
+  const [t] = await db.select().from(baseTables).where(and(eq(baseTables.id, tableId), eq(baseTables.orgId, ctx.orgId), isNull(baseTables.archivedAt))).limit(1);
+  if (!t?.primaryFieldId) throw invalid("That table can't take quick adds.");
+  const [id] = await createRecords(ctx, t.id, [{ [t.primaryFieldId]: v.slice(0, 500) }]);
+  return { baseId: t.baseId, tableId: t.id, recordId: id };
 }

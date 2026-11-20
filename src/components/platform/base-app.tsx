@@ -9,7 +9,7 @@ import { ChevronDown, Plus, Search, User, Users, Table2, Lock } from "lucide-rea
 import type { ViewConfig } from "@/db/schema";
 import { isComputed } from "@/lib/platform/fields";
 import {
-  aiFillFieldAction, archiveFieldAction, clickButtonAction, archiveTableAction, archiveViewAction, createFieldAction, createRecordsAction, createTableAction, createViewAction,
+  aiFillFieldAction, archiveFieldAction, clickButtonAction, archiveTableAction, archiveViewAction, createFieldAction, createRecordsAction, createTableAction, reorderTablesAction, createViewAction,
   deleteRecordsAction, loadViewAction, setRowColorAction, updateBaseAction, updateCellsAction, updateTableAction, updateViewAction, updateViewConfigAction,
 } from "@/app/platform-actions";
 import { VIEW_ICONS, VIEW_LABELS } from "./icons";
@@ -21,7 +21,7 @@ import { RecordDialog } from "./record-dialog";
 import { ImportDialog } from "./import-dialog";
 import { AddTableMenu, FieldTypePicker, TableSwitcher } from "./table-tools";
 import { AiBuilderDialog } from "./ai-builder";
-import type { FieldType } from "@/lib/platform/fields";
+import type { FieldOptions, FieldType } from "@/lib/platform/fields";
 import { CalendarView, FormView, GalleryView, KanbanView, ListView, TimelineView } from "./views";
 import { toServerValue } from "./cells";
 import type { BaseData, ClientField, ClientRow } from "./types";
@@ -36,7 +36,7 @@ export function BaseApp({ data }: { data: BaseData }) {
   const [config, setConfig] = useState<ViewConfig>(data.view.config);
   const [search, setSearch] = useState("");
   const [sidebar, setSidebar] = useState(true);
-  const [fieldDlg, setFieldDlg] = useState<{ field: ClientField | null; after?: string; type?: FieldType; linkTableId?: string } | null>(null);
+  const [fieldDlg, setFieldDlg] = useState<{ field: ClientField | null; after?: string; type?: FieldType; linkTableId?: string; preset?: FieldOptions } | null>(null);
   const [picker, setPicker] = useState<{ anchor: DOMRect; after?: string } | null>(null);
   const [tablesPop, setTablesPop] = useState<DOMRect | null>(null);
   const [addTablePop, setAddTablePop] = useState<DOMRect | null>(null);
@@ -235,12 +235,12 @@ export function BaseApp({ data }: { data: BaseData }) {
         </main>
       </div>
 
-      {fieldDlg && <FieldDialog data={data} field={fieldDlg.field} afterFieldId={fieldDlg.after} initialType={fieldDlg.type} initialLinkTableId={fieldDlg.linkTableId} onClose={() => setFieldDlg(null)} onSaved={() => { setFieldDlg(null); router.refresh(); }} />}
+      {fieldDlg && <FieldDialog data={data} field={fieldDlg.field} afterFieldId={fieldDlg.after} initialType={fieldDlg.type} initialLinkTableId={fieldDlg.linkTableId} initialOptions={fieldDlg.preset} onClose={() => setFieldDlg(null)} onSaved={() => { setFieldDlg(null); router.refresh(); }} />}
       {recordId && <RecordDialog data={data} recordId={recordId} ids={ids} onNavigate={setRecordId} onClose={() => { setRecordId(null); reload(); }}
         onEdit={(rid, fid, v, before) => onEdit([{ recordId: rid, fieldId: fid, value: v, before }])} onDelete={(id) => deleteRows([id])} onAiFill={aiFill} />}
       <ImportDialog isOpen={importOpen} onClose={() => setImportOpen(false)} baseId={data.base.id} />
-      {picker && <FieldTypePicker anchor={picker.anchor} onClose={() => setPicker(null)} tables={data.tables} aiConfigured={data.aiConfigured} onPick={(type, linkTableId) => { setFieldDlg({ field: null, after: picker.after, type, linkTableId }); setPicker(null); }} />}
-      {tablesPop && <TableSwitcher anchor={tablesPop} tables={data.tables} currentId={data.table.id} hidden={hiddenTables} onToggleHidden={toggleHidden} onPick={(id) => { setTablesPop(null); if (id !== data.table.id) go(id); }} onAdd={data.can.schema ? (r) => { setTablesPop(null); setAddTablePop(r); } : undefined} onClose={() => setTablesPop(null)} />}
+      {picker && <FieldTypePicker anchor={picker.anchor} onClose={() => setPicker(null)} tables={data.tables} aiConfigured={data.aiConfigured} onPick={(type, linkTableId, preset) => { setFieldDlg({ field: null, after: picker.after, type, linkTableId, preset }); setPicker(null); }} />}
+      {tablesPop && <TableSwitcher anchor={tablesPop} tables={data.tables} currentId={data.table.id} hidden={hiddenTables} onToggleHidden={toggleHidden} onPick={(id) => { setTablesPop(null); if (id !== data.table.id) go(id); }} onAdd={data.can.schema ? (r) => { setTablesPop(null); setAddTablePop(r); } : undefined} onClose={() => { setTablesPop(null); router.refresh(); }} onReorder={data.can.schema ? async (ids) => { const r = await reorderTablesAction(data.base.id, ids); if (!r.ok) notify(r.error); } : undefined} />}
       {addTablePop && <AddTableMenu anchor={addTablePop} onClose={() => setAddTablePop(null)} aiConfigured={data.aiConfigured} onBlank={addBlankTable} onImport={() => setImportOpen(true)} onSync={() => router.push(`/base/${data.base.id}/sync`)} onAi={() => setAiOpen(true)} />}
       <AiBuilderDialog isOpen={aiOpen} onClose={() => setAiOpen(false)} />
       {confirm && confirm.body === "perm" ? <TablePermsDialog data={data} onClose={() => setConfirm(null)} onSaved={() => { setConfirm(null); router.refresh(); notify("Table permissions saved"); }} /> : confirm && (

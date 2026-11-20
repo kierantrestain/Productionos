@@ -7,7 +7,10 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { myWorkCountsAction } from "@/app/hub-actions";
 import { openCommandPalette, CommandPalette } from "./command-palette";
 
-type Counts = { overdue: number; today: number; soon: number; assigned: number; approvals: number };
+type Counts = { overdue: number; today: number; soon: number; assigned: number; approvals: number; mentions: number; newMentions: number };
+const SEEN = "bangon:mentionsSeen";
+/** Called when My work is opened: mentions up to now count as seen. */
+export function markMentionsSeen() { try { localStorage.setItem(SEEN, new Date().toISOString()); sessionStorage.removeItem("bangon:work"); } catch { /* ignore */ } }
 let inflight: Promise<Counts | null> | null = null;
 /** My-work counts, shared by the sidebar badge and Home, cached for a minute so navigation stays instant. */
 export function useWorkCounts() {
@@ -16,12 +19,13 @@ export function useWorkCounts() {
     let cached: { at: number; c: Counts } | null = null;
     try { cached = JSON.parse(sessionStorage.getItem("bangon:work") ?? "null"); } catch { /* storage blocked */ }
     if (cached && Date.now() - cached.at < 60_000) { setC(cached.c); return; }
-    inflight ??= myWorkCountsAction().then((r) => { inflight = null; if (!r.ok) return null; try { sessionStorage.setItem("bangon:work", JSON.stringify({ at: Date.now(), c: r.data })); } catch { /* ignore */ } return r.data; });
+    let since: string | undefined; try { since = localStorage.getItem(SEEN) ?? undefined; } catch { /* ignore */ }
+    inflight ??= myWorkCountsAction(since).then((r) => { inflight = null; if (!r.ok) return null; try { sessionStorage.setItem("bangon:work", JSON.stringify({ at: Date.now(), c: r.data })); } catch { /* ignore */ } return r.data; });
     inflight.then((v) => v && setC(v));
   }, []);
   return c;
 }
-export function useAttentionCount() { const c = useWorkCounts(); return c ? c.overdue + c.today + c.approvals : null; }
+export function useAttentionCount() { const c = useWorkCounts(); return c ? c.overdue + c.today + c.approvals + (c.newMentions ?? 0) : null; }
 
 /** Slim workspace rail shown beside full-screen base pages: the same destinations everywhere. */
 export function WorkspaceRail({ userName }: { userName: string }) {
