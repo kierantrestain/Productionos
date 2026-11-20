@@ -1200,6 +1200,8 @@ export const bases = pgTable("bases", {
   color: text("color").notNull().default("blue"),
   templateKey: text("template_key"),
   sortOrder: integer("sort_order").notNull().default(0),
+  /** "workspace": members get their workspace role unless denied; "private": owners + explicit base members only. */
+  visibility: text("visibility").notNull().default("workspace"),
 });
 
 /** Per-base role overrides (Airtable "base collaborators"). */
@@ -1451,3 +1453,21 @@ export const migrationMap = pgTable("migration_map", {
   meta: jsonb("meta").$type<Record<string, unknown>>(),
   createdAt: ts("created_at").notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.orgId, t.sourceSystem, t.sourceKind, t.sourceId] }), index("migration_map_target").on(t.targetId)]);
+
+/** Files stored for attachment fields. Bytes live in the storage provider; record values hold {id, filename, size, type}. */
+export const baseAttachments = pgTable("base_attachments", {
+  id: id(),
+  orgId: uuid("org_id").notNull(),
+  baseId: uuid("base_id").notNull().references(() => bases.id, { onDelete: "cascade" }),
+  tableId: uuid("table_id").notNull(),
+  fieldId: uuid("field_id").notNull(),
+  recordId: uuid("record_id"),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  sha256: text("sha256").notNull(),
+  storageKey: text("storage_key").notNull(),
+  createdBy: uuid("created_by"),
+  createdAt: ts("created_at").notNull().defaultNow(),
+  deletedAt: ts("deleted_at"),
+}, (t) => [index("base_attachments_record").on(t.recordId)]);

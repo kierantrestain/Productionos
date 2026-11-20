@@ -32,6 +32,7 @@ export interface FieldOptions {
   resultType?: "text" | "number" | "date" | "boolean";
   prompt?: string;                        // aiText: prompt template with {Field} refs
   label?: string; url?: string;           // button
+  action?: "open_url" | "update_record" | "run_automation"; values?: Record<string, unknown>; automationId?: string; // button
 }
 export const ROLLUP_FNS = ["sum", "avg", "min", "max", "count", "countA", "countUnique", "concat", "and", "or", "earliest", "latest"] as const;
 export type RollupFn = (typeof ROLLUP_FNS)[number];

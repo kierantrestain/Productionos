@@ -53,10 +53,12 @@ export async function listBaseMembers(ctx: Ctx, baseId: string) {
 
 export async function setBaseMember(ctx: Ctx, baseId: string, userId: string, role: string | null) {
   const a = await baseAccess(ctx, baseId); requireRole(a, "creator", "share this base");
-  if (role && (!PLATFORM_ROLE_LIST.includes(role as never) || role === "portal")) throw invalid("Unknown role.");
+  if (role && role !== "none" && (!PLATFORM_ROLE_LIST.includes(role as never) || role === "portal")) throw invalid("Unknown role.");
   if (role && RANK[role] > RANK[a.role]) throw forbidden("You can't grant more access than you have.");
   const [m] = await db.select().from(memberships).where(and(eq(memberships.orgId, ctx.orgId), eq(memberships.userId, userId))).limit(1);
   if (!m) throw notFound("That person isn't in this workspace.");
+  if (userId === ctx.userId && (role === "none" || (role && RANK[role] < RANK.creator))) throw invalid("You can't remove your own management access to this base.");
+  if (role === "none" && m.platformRole === "owner") throw invalid("Workspace owners can't be denied access — change their workspace role first.");
   if (role) await db.insert(baseMembers).values({ orgId: ctx.orgId, baseId, userId, role }).onConflictDoUpdate({ target: [baseMembers.baseId, baseMembers.userId], set: { role } });
   else await db.delete(baseMembers).where(and(eq(baseMembers.baseId, baseId), eq(baseMembers.userId, userId)));
   await audit(db, ctx, "set_base_member", "bases", baseId, { meta: { userId, role } });

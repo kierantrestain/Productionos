@@ -59,6 +59,7 @@ export function SecurityView({ sso, orgSlug, secrets }: { sso: Sso; orgSlug: str
   return (
     <div style={{ ...page, maxWidth: 760 }}>
       <h1 style={{ fontSize: 26, fontWeight: 700 }}>Security &amp; single sign-on</h1>
+      <p style={{ fontSize: 13, margin: "4px 0 0" }}><a href="/workspace/api">API &amp; personal access tokens →</a></p>
       <p style={{ color: "var(--color-text-secondary)", margin: "4px 0 16px" }}>OpenID Connect SSO with any standards-compliant identity provider (Okta, Microsoft Entra ID, Google Workspace, Auth0, JumpCloud…).</p>
       {!secrets && <p className="p-basecard" style={{ color: "var(--color-text-orange)", marginBottom: 12 }}>SECRET_ENCRYPTION_KEY isn&apos;t set on this deployment, so the client secret can&apos;t be stored yet. Add a 32-byte base64 key to the environment, then return here.</p>}
       <div className="p-basecard" style={{ display: "block" }}>

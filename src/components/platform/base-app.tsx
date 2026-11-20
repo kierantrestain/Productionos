@@ -9,7 +9,7 @@ import { ChevronDown, Plus, Search, User, Users, Upload, Table2, Lock } from "lu
 import type { ViewConfig } from "@/db/schema";
 import { isComputed } from "@/lib/platform/fields";
 import {
-  aiFillFieldAction, archiveFieldAction, archiveTableAction, archiveViewAction, createFieldAction, createRecordsAction, createTableAction, createViewAction,
+  aiFillFieldAction, archiveFieldAction, clickButtonAction, archiveTableAction, archiveViewAction, createFieldAction, createRecordsAction, createTableAction, createViewAction,
   deleteRecordsAction, loadViewAction, setRowColorAction, updateBaseAction, updateCellsAction, updateTableAction, updateViewAction, updateViewConfigAction,
 } from "@/app/platform-actions";
 import { VIEW_ICONS, VIEW_LABELS } from "./icons";
@@ -73,7 +73,7 @@ export function BaseApp({ data }: { data: BaseData }) {
   const onEdit = async (cells: CellEdit[]) => {
     const byField = new Map(data.allFields.map((f) => [f.id, f]));
     setRows((rs) => rs.map((r) => { const mine = cells.filter((c) => c.recordId === r.id); if (!mine.length) return r; const v = { ...r.values }; for (const c of mine) v[c.fieldId] = c.value; return { ...r, values: v }; }));
-    const r = await updateCellsAction(cells.map((c) => ({ recordId: c.recordId, fieldId: c.fieldId, value: toServerValue(byField.get(c.fieldId)!, c.value) })));
+    const r = await updateCellsAction(cells.map((c) => ({ recordId: c.recordId, fieldId: c.fieldId, value: toServerValue(byField.get(c.fieldId)!, c.value), ...("before" in c ? { expected: toServerValue(byField.get(c.fieldId)!, c.before ?? null) } : {}) })));
     if (!r.ok) { notify(r.error); reload(); return false; }
     reload(); return true;
   };
@@ -99,6 +99,12 @@ export function BaseApp({ data }: { data: BaseData }) {
     create(vals, id);
   };
 
+  const pressButton = async (f: ClientField, recordId: string) => {
+    const r = await clickButtonAction(f.id, recordId);
+    if (!r.ok) { notify(r.error); return; }
+    if (r.data.url) window.open(r.data.url, "_blank", "noopener,noreferrer");
+    else { notify(r.data.kind === "run_automation" ? `${f.options.label || f.name}: automation ${r.data.status}` : `${f.options.label || f.name}: done`); reload(); }
+  };
   const aiFill = async (fieldId: string, ids: string[]) => {
     if (!data.aiConfigured) { notify("AI isn't configured — add ANTHROPIC_API_KEY to the deployment."); return; }
     if (!ids.length) { notify("No empty cells to generate"); return; }
@@ -203,7 +209,7 @@ export function BaseApp({ data }: { data: BaseData }) {
             can={{ create: data.can.create, edit: data.can.edit, delete: data.can.delete, schema: data.can.schema, viewEdit: data.view.canEdit }}
             onEdit={onEdit} onAddRow={(after, v) => create(v ?? {}, after)} onExpand={setRecordId} onDeleteRows={deleteRows} onDuplicate={duplicate}
             onSetColor={async (ids2, c) => { setRows((rs) => rs.map((r) => (ids2.includes(r.id) ? { ...r, color: c } : r))); const r = await setRowColorAction(ids2, c); if (!r.ok) notify(r.error); else if (config.color?.mode && config.color.mode !== "none") notify("Row colours from this view's colour rules take priority"); }}
-            onFieldAction={fieldAction} onAddField={() => setFieldDlg({ field: null })} onConfig={onConfig} onAiFill={aiFill} notify={notify} />}
+            onFieldAction={fieldAction} onAddField={() => setFieldDlg({ field: null })} onConfig={onConfig} onAiFill={aiFill} notify={notify} onReload={() => reload()} onButton={pressButton} />}
           {view.type === "kanban" && <KanbanView {...viewProps} />}
           {view.type === "calendar" && <CalendarView {...viewProps} />}
           {view.type === "gallery" && <GalleryView {...viewProps} />}

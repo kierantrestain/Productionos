@@ -8,7 +8,7 @@ import { baseFields, baseRecords, baseTables, recordComments, recordRevisions, u
 import { COLORS, coerceValue, isComputed, type FieldDefLite, type FieldOptions, type FieldType } from "@/lib/platform/fields";
 import type { Ctx } from "../auth/context";
 import { audit, emit } from "../audit";
-import { forbidden, invalid, notFound } from "../errors";
+import { conflict, forbidden, invalid, notFound } from "../errors";
 import { atLeast, fieldEditable, fieldVisible, requireRole } from "./access";
 import { tableContext } from "./schema";
 
@@ -82,11 +82,20 @@ export async function createRecords(ctx: Ctx, tableId: string, rows: Values[], o
   return opts.tx ? run(opts.tx) : db.transaction(run);
 }
 
-export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, opts: { tx?: Tx; expectedVersion?: number; automationDepth?: number; origin?: "user" | "import" | "system" } = {}) {
+/** Empty-ish values compare equal (null, undefined, "", false, []), so "unchanged" isn't a false conflict. */
+const norm = (v: unknown) => (v === undefined || v === null || v === "" || v === false || (Array.isArray(v) && !v.length) ? null : v);
+const sameValue = (a: unknown, b: unknown) => JSON.stringify(norm(a)) === JSON.stringify(norm(b));
+
+export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, opts: { tx?: Tx; expectedVersion?: number; expectedValues?: Values; automationDepth?: number; origin?: "user" | "import" | "system" } = {}) {
   const run = async (tx: Tx) => {
+    // Row lock: concurrent writers to the same record are serialised, then checked below.
     const [cur] = await tx.select().from(baseRecords).where(and(eq(baseRecords.id, recordId), eq(baseRecords.orgId, ctx.orgId), isNull(baseRecords.deletedAt))).for("update").limit(1);
     if (!cur) throw notFound("Record not found.");
-    if (opts.expectedVersion !== undefined && cur.version !== opts.expectedVersion) throw invalid("This record changed while you were editing. Your view has been refreshed.");
+    if (opts.expectedVersion !== undefined && cur.version !== opts.expectedVersion) throw conflict("This record changed while you were editing. Your view has been refreshed.");
+    // Per-cell optimistic check: other fields may change freely; the edited cell must still hold what the editor saw.
+    for (const [k, expected] of Object.entries(opts.expectedValues ?? {})) {
+      if (k in patch && !sameValue(cur.data[k], expected) && !sameValue(cur.data[k], patch[k])) throw conflict("Someone else just changed this cell. The latest value has been loaded — re-apply your edit if it's still needed.");
+    }
     const { table, access } = await tableContext(ctx, cur.tableId, tx);
     requireRole(access, table.permissions?.edit ?? "editor", "edit records in this table");
     const fields = await fieldsOf(tx, cur.tableId);
@@ -107,11 +116,16 @@ export async function updateRecord(ctx: Ctx, recordId: string, patch: Values, op
 }
 
 /** Bulk cell writes (paste, fill, batch edit) in one transaction. */
-export async function updateCells(ctx: Ctx, cells: { recordId: string; fieldId: string; value: unknown }[]) {
+export async function updateCells(ctx: Ctx, cells: { recordId: string; fieldId: string; value: unknown; expected?: unknown }[]) {
   if (cells.length > 5000) throw invalid("Too many cells at once (max 5,000).");
-  const byRecord = new Map<string, Values>();
-  for (const c of cells) byRecord.set(c.recordId, { ...(byRecord.get(c.recordId) ?? {}), [c.fieldId]: c.value });
-  await db.transaction(async (tx) => { for (const [id, patch] of byRecord) await updateRecord(ctx, id, patch, { tx }); });
+  const byRecord = new Map<string, { patch: Values; expected: Values }>();
+  for (const c of cells) {
+    const e = byRecord.get(c.recordId) ?? { patch: {}, expected: {} };
+    e.patch[c.fieldId] = c.value;
+    if ("expected" in c) e.expected[c.fieldId] = c.expected;
+    byRecord.set(c.recordId, e);
+  }
+  await db.transaction(async (tx) => { for (const [id, e] of byRecord) await updateRecord(ctx, id, e.patch, { tx, expectedValues: e.expected }); });
   return byRecord.size;
 }
 

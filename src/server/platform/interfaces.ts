@@ -2,14 +2,14 @@
  * Interfaces: dashboards of widgets computed server-side from live records, through the same view
  * engine and permission checks as the grid (role-hidden fields are never aggregated for that user).
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { baseInterfaces, baseViews } from "@/db/schema";
+import { baseInterfaces, baseTables, baseViews } from "@/db/schema";
 import { cellText } from "@/lib/platform/cell-text";
 import type { Ctx } from "../auth/context";
 import { audit } from "../audit";
 import { invalid, notFound } from "../errors";
-import { baseAccess, requireRole } from "./access";
+import { atLeast, baseAccess, requireRole } from "./access";
 import { runView } from "./query";
 
 export type Widget = {
@@ -27,6 +27,10 @@ export async function saveInterface(ctx: Ctx, baseId: string, input: { id?: stri
   requireRole(await baseAccess(ctx, baseId), "creator", "edit interfaces");
   if (!input.name?.trim()) throw invalid("Name the interface.");
   if (!Array.isArray(input.widgets) || input.widgets.length > 40) throw invalid("Interfaces hold up to 40 widgets.");
+  const tids = [...new Set(input.widgets.map((w) => String(w.tableId)))];
+  if (tids.some((t) => !/^[0-9a-f-]{36}$/i.test(t))) throw invalid("Every widget needs a table.");
+  const own = tids.length ? await db.select({ id: baseTables.id }).from(baseTables).where(and(inArray(baseTables.id, tids), eq(baseTables.baseId, baseId), eq(baseTables.orgId, ctx.orgId), isNull(baseTables.archivedAt))) : [];
+  if (own.length !== tids.length) throw invalid("Widgets can only use tables from this base.");
   const widgets = input.widgets.map((w) => ({ ...w, title: String(w.title ?? "").slice(0, 120) })) as unknown as Record<string, unknown>[];
   if (input.id) {
     const [row] = await db.update(baseInterfaces).set({ name: input.name.trim(), widgets, updatedAt: new Date() }).where(and(eq(baseInterfaces.id, input.id), eq(baseInterfaces.baseId, baseId), eq(baseInterfaces.orgId, ctx.orgId))).returning();
@@ -53,13 +57,18 @@ function bucket(d: Date, unit: "day" | "week" | "month") {
 export async function computeWidgets(ctx: Ctx, baseId: string, widgets: Widget[]): Promise<WidgetData[]> {
   const { role } = await baseAccess(ctx, baseId);
   const cache = new Map<string, Awaited<ReturnType<typeof runView>>>();
+  // Every widget must read a table of THIS base (the role above was checked for this base only).
+  const ids = [...new Set(widgets.map((w) => w.tableId).filter((x) => /^[0-9a-f-]{36}$/i.test(String(x))))];
+  const own = new Set(ids.length ? (await db.select({ id: baseTables.id }).from(baseTables).where(and(inArray(baseTables.id, ids), eq(baseTables.baseId, baseId), eq(baseTables.orgId, ctx.orgId), isNull(baseTables.archivedAt)))).map((t) => t.id) : []);
   const out: WidgetData[] = [];
   for (const w of widgets) {
     try {
+      if (!own.has(w.tableId)) { out.push({ id: w.id, error: "This widget's table isn't part of this base." }); continue; }
       let config = {};
       if (w.viewId) {
         const [v] = await db.select().from(baseViews).where(and(eq(baseViews.id, w.viewId), eq(baseViews.orgId, ctx.orgId), isNull(baseViews.archivedAt))).limit(1);
-        if (v && v.tableId === w.tableId && (!v.ownerUserId || v.ownerUserId === ctx.userId)) config = v.config;
+        if (!v || v.tableId !== w.tableId || (v.ownerUserId && v.ownerUserId !== ctx.userId) || !atLeast(role, v.visibleTo)) { out.push({ id: w.id, error: "This widget's view isn't available to you." }); continue; }
+        config = v.config;
       }
       const k = `${w.tableId}:${w.viewId ?? ""}`;
       if (!cache.has(k)) cache.set(k, await runView(ctx, role, w.tableId, config, {}));

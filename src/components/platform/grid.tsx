@@ -57,6 +57,8 @@ export interface GridProps {
   onAddField: () => void;
   onConfig: (patch: ViewConfig) => void;
   onAiFill: (fieldId: string, ids: string[]) => void;
+  onReload?: () => void;
+  onButton?: (f: ClientField, recordId: string) => void;
   notify: (msg: string) => void;
 }
 
@@ -114,7 +116,7 @@ export function Grid(p: GridProps) {
   }, []);
 
   const cellAt = (r: number, c: number) => ({ row: rowItems[r]?.row, f: fields[c] });
-  const editableCell = (f?: ClientField) => !!f && p.can.edit && f.editable && !isComputed(f.type) && f.type !== "attachment";
+  const editableCell = (f?: ClientField) => !!f && p.can.edit && f.editable && !isComputed(f.type) && f.type !== "button";
   const range = active && anchor ? { r0: Math.min(active.r, anchor.r), r1: Math.max(active.r, anchor.r), c0: Math.min(active.c, anchor.c), c1: Math.max(active.c, anchor.c) } : active ? { r0: active.r, r1: active.r, c0: active.c, c1: active.c } : null;
 
   const scrollIntoView = useCallback((r: number, c: number) => {
@@ -166,7 +168,7 @@ export function Grid(p: GridProps) {
     const r0 = fill ? range!.r0 : active.r, c0 = fill ? range!.c0 : active.c;
     for (let i = 0; i < rN; i++) for (let j = 0; j < cN; j++) {
       const { row, f } = cellAt(r0 + i, c0 + j); if (!row || !f) continue;
-      if (!editableCell(f) || ["link", "user"].includes(f.type)) { skipped++; continue; }
+      if (!editableCell(f) || ["link", "user", "attachment"].includes(f.type)) { skipped++; continue; }
       const raw = fill ? grid[0][0] : grid[i][j];
       cells.push({ recordId: row.id, fieldId: f.id, value: f.type === "multipleSelects" ? raw.split(",").map((s) => s.trim()).filter(Boolean) : raw === "" ? null : raw, before: row.values[f.id] ?? null });
     }
@@ -296,7 +298,7 @@ export function Grid(p: GridProps) {
                     if (ev.shiftKey && active) { if (!anchor) setAnchor(active); } else setAnchor(null);
                     if (active?.r === r && active.c === c && f.type === "checkbox") toggleCheckbox(r, c);
                     if (f.type === "rating" && editableCell(f)) { const t = (ev.target as HTMLElement).closest(".stars span"); if (t) { const i = [...t.parentElement!.children].indexOf(t) + 1; commitEdits([{ recordId: it.row.id, fieldId: f.id, value: i === it.row.values[f.id] ? 0 : i, before: it.row.values[f.id] ?? null }]); } }
-                    if (f.type === "button" && f.options.url) window.open(f.options.url.replace(/\{RECORD_ID\}/g, it.row.id), "_blank", "noopener");
+                    if (f.type === "button") p.onButton?.(f, it.row.id);
                     setActive({ r, c });
                   }}
                   onDouble={() => { if (f.type === "checkbox") return; if (editableCell(f)) setEditing({}); else if (f.type === "attachment" || isComputed(f.type)) p.onExpand(it.row.id); }}
@@ -313,7 +315,7 @@ export function Grid(p: GridProps) {
 
         {editing && editorPos && activeItem && activeField && (
           <div className="g-editor" style={{ top: editorPos.top - HEAD_H, left: editorPos.left, minWidth: editorPos.minWidth }} onMouseDown={(e) => e.stopPropagation()}>
-            <CellEditor f={activeField} value={activeItem.row.values[activeField.id]} initial={editing.initial} collaborators={p.collaborators} canSchema={p.can.schema}
+            <CellEditor f={activeField} value={activeItem.row.values[activeField.id]} initial={editing.initial} collaborators={p.collaborators} canSchema={p.can.schema} recordId={activeItem.row.id} onRefresh={p.onReload}
               onCancel={() => { setEditing(null); wrapRef.current?.focus(); }}
               onCommit={(v, mv) => {
                 setEditing(null); wrapRef.current?.focus();

@@ -19,6 +19,7 @@ export function toServerValue(f: ClientField, v: unknown): unknown {
 function Chip({ name, color }: { name: string; color?: string }) { return <span className={`chip ${color ?? ""}`}>{name}</span>; }
 
 export function CellView({ f, v }: { f: ClientField; v: unknown }) {
+  if (f.type === "button") return <span className="chip blue" style={{ cursor: "pointer", fontWeight: 600 }}>{f.options.label || (f.options.action === "update_record" ? "Update" : f.options.action === "run_automation" ? "Run" : "Open")}</span>;
   if (v === null || v === undefined || v === "" || (Array.isArray(v) && !v.length)) {
     if (f.type === "checkbox") return <span className="cbx" aria-label="Unchecked" />;
     return null;
@@ -34,7 +35,6 @@ export function CellView({ f, v }: { f: ClientField; v: unknown }) {
     case "attachment": return <span className="chips">{(v as { id: string; filename: string }[]).map((a) => <span key={a.id} className="chip"><Paperclip size={10} />{a.filename}</span>)}</span>;
     case "url": return <a className="g-trunc" href={String(v)} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{String(v).replace(/^https?:\/\//, "")}</a>;
     case "email": return <a className="g-trunc" href={`mailto:${v}`} onClick={(e) => e.stopPropagation()}>{String(v)}</a>;
-    case "button": return <span className="chip blue">{f.options.label || "Open"}</span>;
     case "lookup": case "rollup": case "formula":
       if (Array.isArray(v) && v.some((x) => x && typeof x === "object")) return <span className="chips">{(v as Ref[]).map((r, i) => <Chip key={i} name={r?.title ?? r?.name ?? ""} />)}</span>;
       return <span className={`g-trunc ${typeof v === "number" ? "num" : ""}`}>{cellText(f, v)}</span>;
@@ -42,11 +42,12 @@ export function CellView({ f, v }: { f: ClientField; v: unknown }) {
   }
 }
 
-export interface EditorProps { f: ClientField; value: unknown; initial?: string; collaborators: { id: string; name: string }[]; canSchema: boolean; onCommit: (v: unknown, move?: "down" | "right" | null) => void; onCancel: () => void }
+export interface EditorProps { f: ClientField; value: unknown; initial?: string; collaborators: { id: string; name: string }[]; canSchema: boolean; onCommit: (v: unknown, move?: "down" | "right" | null) => void; onCancel: () => void; recordId?: string; onRefresh?: () => void }
 
 /** Type-aware cell editor. Text-like editors commit on Enter/Tab/blur, cancel on Escape. */
 export function CellEditor(p: EditorProps) {
   switch (p.f.type) {
+    case "attachment": return <AttachmentEditor {...p} />;
     case "singleSelect": case "multipleSelects": return <SelectEditor {...p} />;
     case "link": return <LinkEditor {...p} />;
     case "user": return <UserEditor {...p} />;
@@ -209,6 +210,63 @@ function UserEditor({ f, value, collaborators, onCommit, onCancel }: EditorProps
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px 8px", gap: 6 }}>
         <button type="button" className="p-tbtn on-blue" onMouseDown={(e) => { e.preventDefault(); onCommit(sel, null); }}>Done</button>
+      </div>
+    </div>
+  );
+}
+
+type Att = { id: string; filename: string; size: number; type: string };
+const fmtSize = (n: number) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** Upload, preview, open and remove files. Changes are saved immediately server-side. */
+function AttachmentEditor({ f, value, recordId, onCancel, onRefresh }: EditorProps) {
+  const [files, setFiles] = useState<Att[]>((value as Att[]) ?? []);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const changed = useRef(false);
+  const close = () => { onCancel(); if (changed.current) onRefresh?.(); };
+  const upload = async (list: FileList | null) => {
+    if (!list?.length || !recordId) return;
+    setBusy(true); setErr("");
+    for (const file of [...list]) {
+      const fd = new FormData(); fd.set("file", file); fd.set("recordId", recordId); fd.set("fieldId", f.id);
+      const r = await fetch("/api/platform/attachments", { method: "POST", body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { setErr(j.error ?? `Upload failed (${r.status})`); break; }
+      setFiles((x) => [...x, j.attachment]); changed.current = true;
+    }
+    setBusy(false);
+  };
+  const remove = async (a: Att) => {
+    setErr("");
+    const r = await fetch(`/api/platform/attachments/${a.id}`, { method: "DELETE" });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); setErr(j.error ?? "Couldn't remove the file."); return; }
+    setFiles((x) => x.filter((y) => y.id !== a.id)); changed.current = true;
+  };
+  return (
+    <div style={{ width: 340, padding: 8 }} onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Escape") close(); }}>
+      {!recordId && <p style={{ fontSize: 12 }}>Save the record first, then add files.</p>}
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, maxHeight: 240, overflow: "auto" }} aria-label={`${f.name} files`}>
+        {files.map((a) => (
+          <li key={a.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: "1px solid var(--color-border)" }}>
+            {a.type.startsWith("image/")
+              ? <img src={`/api/platform/attachments/${a.id}`} alt="" width={32} height={32} style={{ objectFit: "cover", borderRadius: 4 }} />
+              : <Paperclip size={16} aria-hidden />}
+            <a href={`/api/platform/attachments/${a.id}`} target="_blank" rel="noopener noreferrer" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{a.filename}</a>
+            <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>{fmtSize(a.size)}</span>
+            <button type="button" className="g-hmenu" style={{ opacity: 1 }} aria-label={`Remove ${a.filename}`} onClick={() => remove(a)}><X size={13} /></button>
+          </li>
+        ))}
+        {!files.length && <li style={{ fontSize: 12, color: "var(--color-text-secondary)", padding: "4px 0" }}>No files yet.</li>}
+      </ul>
+      {err && <p role="alert" style={{ color: "var(--color-text-error)", fontSize: 12, marginTop: 6 }}>{err}</p>}
+      <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
+        <label className="p-tbtn on-blue" style={{ cursor: recordId ? "pointer" : "not-allowed" }}>
+          <Plus size={14} />{busy ? "Uploading…" : "Add files"}
+          <input type="file" multiple disabled={!recordId || busy} style={{ display: "none" }} aria-label={`Upload to ${f.name}`} onChange={(e) => { upload(e.target.files); e.target.value = ""; }} />
+        </label>
+        <span style={{ flex: 1, fontSize: 11, color: "var(--color-text-secondary)" }}>Up to 25 MB each</span>
+        <button type="button" className="p-tbtn" onClick={close}>Done</button>
       </div>
     </div>
   );

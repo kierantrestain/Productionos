@@ -28,10 +28,20 @@ export class Computer {
     return this.userNames;
   }
 
+  /** All tables computed together must share one base: links can never pull another base's records. */
+  private baseId?: string;
+
   async load(tableId: string): Promise<TableState> {
     const hit = this.tables.get(tableId); if (hit) return hit;
     const [table] = await db.select().from(baseTables).where(and(eq(baseTables.id, tableId), eq(baseTables.orgId, this.ctx.orgId))).limit(1);
     if (!table) throw new Error("table missing");
+    this.baseId ??= table.baseId;
+    if (table.baseId !== this.baseId) {
+      // Cross-base reference (only possible through tampered options): expose nothing from it.
+      const empty: TableState = { table, fields: [], records: [], byId: new Map(), values: new Map() };
+      this.tables.set(tableId, empty);
+      return empty;
+    }
     const fields = (await db.select().from(baseFields).where(and(eq(baseFields.tableId, tableId), isNull(baseFields.archivedAt))).orderBy(asc(baseFields.sortOrder), asc(baseFields.createdAt)))
       .map((f) => ({ id: f.id, name: f.name, type: f.type as FieldType, options: f.options as FieldOptions, description: f.description, permissions: f.permissions }));
     const records = await db.select().from(baseRecords).where(and(eq(baseRecords.tableId, tableId), isNull(baseRecords.deletedAt))).orderBy(asc(baseRecords.sortOrder), asc(baseRecords.autonumber));
