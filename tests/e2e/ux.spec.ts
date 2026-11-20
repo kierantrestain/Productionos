@@ -78,6 +78,7 @@ test.describe.serial("usability", () => {
     await expect(page.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
     // table search + sort on the "All …" page
     await page.getByRole("navigation", { name: "App pages" }).getByRole("link").nth(1).click();
+    await expect(page.getByRole("heading", { level: 1, name: /^All / })).toBeVisible();
     const search = page.getByRole("searchbox").first();
     await search.fill("zzzz-no-match");
     await expect(page.getByText("No matches.")).toBeVisible();
@@ -88,11 +89,50 @@ test.describe.serial("usability", () => {
     const baseId = await firstBase(page);
     await page.goto(`/base/${baseId}/automations`);
     const recipes = page.getByRole("region", { name: "Recipes" });
-    if (!(await recipes.locator(".if-layout").first().isVisible())) await recipes.getByRole("button", { name: /Recipes for this base/ }).click();
+    await expect(recipes).toBeVisible();
+    if (await recipes.getByRole("button", { name: /Recipes for this base/ }).isVisible()) await recipes.getByRole("button", { name: /Recipes for this base/ }).click();
     await recipes.locator(".if-layout").first().click();
     const dlg = page.getByRole("dialog");
     await expect(dlg).toBeVisible();
     await dlg.getByRole("button", { name: "Close" }).click();
     await expect(dlg).toHaveCount(0);
+  });
+
+  test("Settings is one click from the sidebar and the base rail; appearance and status work", async ({ page }) => {
+    await login(page);
+    await page.goto("/");
+    await page.getByRole("link", { name: "Settings" }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Appearance" }).click();
+    await page.getByRole("radio", { name: /Light/ }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("navigation", { name: "Settings sections" }).getByRole("link", { name: "Integrations & status" }).click();
+    await expect(page.getByRole("region", { name: "Integrations & system status" })).toContainText("AI (Claude)");
+    const baseId = await firstBase(page);
+    await page.goto(`/base/${baseId}`);
+    const rail = page.getByRole("navigation", { name: "Workspace" });
+    await rail.getByRole("link", { name: "Settings" }).click();
+    await expect(page).toHaveURL(/\/workspace\/settings/);
+    await page.goto(`/base/${baseId}`);
+    await rail.getByRole("link", { name: "My work" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: /Good (morning|afternoon|evening)/ })).toBeVisible();
+  });
+
+  test("⌘K finds a base by name and opens it; commands work", async ({ page }) => {
+    await login(page);
+    await page.goto("/");
+    const name = (await page.locator("a[href^='/base/']").first().innerText()).split("\n")[0].trim();
+    await page.keyboard.press("Control+k");
+    const box = page.getByRole("combobox", { name: "Search" });
+    await expect(box).toBeFocused();
+    await box.fill(name.slice(0, 6));
+    await expect(page.getByRole("option").first()).toBeVisible();
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/\/base\/[^/]+\/[^/]+\/[^/?]+/); // base → table → view resolved
+    await expect(page.getByRole("navigation", { name: "Base sections" })).toBeVisible();
+    await page.keyboard.press("Control+k");
+    await page.getByRole("combobox", { name: "Search" }).fill("settings");
+    await page.getByRole("option", { name: /^Settings/ }).click();
+    await expect(page).toHaveURL(/\/workspace\/settings/);
   });
 });

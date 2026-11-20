@@ -3,12 +3,17 @@ import { usePathname } from "next/navigation";
 import { AppShell } from "@astryxdesign/core/AppShell";
 import { SideNav, SideNavHeading, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
 import { Avatar } from "@astryxdesign/core/Avatar";
-import { Clapperboard, Home, LayoutTemplate, LogOut, Settings, ShieldCheck, Users } from "lucide-react";
+import { AppWindow, Clapperboard, Home, Inbox, LayoutTemplate, LogOut, ScrollText, Search, Settings, ShieldCheck, Users } from "lucide-react";
+import { CommandPalette, openCommandPalette } from "@/components/hub/command-palette";
+import { useAttentionCount } from "@/components/hub/rail";
+import { BaseIcon } from "./icons";
+import { HEAD_BG } from "./base-header";
 import { logoutAction, switchOrgAction } from "@/app/actions";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
-export function PlatformShell({ user, org, orgs, children }: { user: { name: string; email: string; role: string }; org: { id: string; name: string; isDemo: boolean }; orgs: { id: string; name: string; isDemo: boolean }[]; children: React.ReactNode }) {
+export function PlatformShell({ user, org, orgs, bases = [], apps = [], children }: { user: { name: string; email: string; role: string }; org: { id: string; name: string; isDemo: boolean }; orgs: { id: string; name: string; isDemo: boolean }[]; bases?: { id: string; name: string; color: string; icon: string }[]; apps?: { id: string; name: string; href: string }[]; children: React.ReactNode }) {
   const path = usePathname();
+  const attention = useAttentionCount();
   const isAdmin = user.role === "owner";
   return (
     <div className="p-root">
@@ -25,20 +30,28 @@ export function PlatformShell({ user, org, orgs, children }: { user: { name: str
             </div>}>
             <SideNavSection title="Workspace" isHeaderHidden>
               <SideNavItem label="Home" href="/" icon={Home} isSelected={path === "/"} />
+              <SideNavItem label="My work" href="/my-work" icon={Inbox} isSelected={path.startsWith("/my-work")} endContent={attention ? <span className="ws-count" aria-label={`${attention} need attention`}>{attention}</span> : undefined} />
+              <SideNavItem label="Search" icon={Search} onClick={() => openCommandPalette()} endContent={<kbd className="ws-kbd">⌘K</kbd>} />
               <SideNavItem label="Templates" href="/templates" icon={LayoutTemplate} isSelected={path === "/templates"} />
             </SideNavSection>
-            <SideNavSection title="Administration">
+            {bases.length > 0 && <SideNavSection title="Bases">
+              {bases.slice(0, 12).map((b) => <SideNavItem key={b.id} label={b.name} href={`/base/${b.id}`} icon={() => <span className="ws-dot" style={{ background: HEAD_BG[b.color] ?? HEAD_BG.blue }}><BaseIcon name={b.icon} size={11} /></span>} />)}
+            </SideNavSection>}
+            {apps.length > 0 && <SideNavSection title="Apps">
+              {apps.slice(0, 10).map((a) => <SideNavItem key={a.id} label={a.name} href={a.href} icon={AppWindow} />)}
+            </SideNavSection>}
+            <SideNavSection title="Workspace">
+              <SideNavItem label="Production Suite" href="/production" icon={Clapperboard} />
               <SideNavItem label="Members & roles" href="/workspace/members" icon={Users} isSelected={path.startsWith("/workspace/members")} />
               {isAdmin && <SideNavItem label="Security & SSO" href="/workspace/security" icon={ShieldCheck} isSelected={path.startsWith("/workspace/security")} />}
-              {isAdmin && <SideNavItem label="Audit log" href="/workspace/audit" icon={Settings} isSelected={path.startsWith("/workspace/audit")} />}
-            </SideNavSection>
-            <SideNavSection title="Apps">
-              <SideNavItem label="Production Suite" href="/production" icon={Clapperboard} />
+              {isAdmin && <SideNavItem label="Audit log" href="/workspace/audit" icon={ScrollText} isSelected={path.startsWith("/workspace/audit")} />}
+              <SideNavItem label="Settings" href="/workspace/settings" icon={Settings} isSelected={path.startsWith("/workspace/settings")} />
             </SideNavSection>
           </SideNav>
         }>
         {children}
       </AppShell>
+      <CommandPalette />
     </div>
   );
 }

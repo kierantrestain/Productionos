@@ -257,9 +257,10 @@ function Recipes({ meta, onPick, compact }: { meta: BaseMeta; onPick: (a: Auto) 
   for (const t of meta.tables.slice(0, 6)) {
     const fs = meta.fields.filter((f) => f.tableId === t.id);
     const prim = fs.find((f) => f.id === t.primaryFieldId)?.name ?? "Name";
-    const sel = fs.find((f) => f.type === "singleSelect" && ((f.options as { choices?: unknown[] }).choices?.length ?? 0) >= 2);
+    // Only a status-like select drives "moves to …" / "not finished" logic — never e.g. Priority.
+    const sel = fs.find((f) => f.type === "singleSelect" && /status|stage|state|phase/i.test(f.name) && ((f.options as { choices?: unknown[] }).choices?.length ?? 0) >= 2);
     const choices = ((sel?.options as { choices?: { id: string; name: string }[] })?.choices) ?? [];
-    const last = choices[choices.length - 1];
+    const last = choices.find((c) => /\b(done|complete|completed|won|closed|delivered|paid|shipped|approved)\b/i.test(c.name)) ?? choices[choices.length - 1];
     const date = fs.find((f) => f.type === "date" || f.type === "dateTime");
     const long = fs.find((f) => f.type === "longText");
     const link = fs.find((f) => f.type === "link" && (f.options as { linkedTableId?: string }).linkedTableId !== t.id);

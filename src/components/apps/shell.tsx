@@ -3,8 +3,9 @@ import Link from "next/link";
 import { useState } from "react";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Avatar } from "@astryxdesign/core/Avatar";
-import { LayoutDashboard, Users, Filter, Briefcase, FileText, Folder, CheckSquare, BarChart3, Zap, Database, Settings, Calendar, Clapperboard, Home, ChevronDown, Menu, X, Sparkles, LogOut, Grid2x2, Receipt, MessageSquare, Eye, Film, ListChecks, Package, MapPin } from "lucide-react";
+import { LayoutDashboard, Users, Filter, Briefcase, FileText, Folder, CheckSquare, BarChart3, Zap, Database, Settings, Calendar, Clapperboard, Home, ChevronDown, Menu, X, Sparkles, LogOut, Grid2x2, Receipt, MessageSquare, Eye, Film, ListChecks, Package, MapPin, Search } from "lucide-react";
 import { logoutAction } from "@/app/actions";
+import { CommandPalette, openCommandPalette } from "@/components/hub/command-palette";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 export const PAGE_ICONS: Record<string, React.ComponentType<{ size?: number; strokeWidth?: number }>> = {
@@ -64,7 +65,7 @@ export function AppRuntimeShell({ app, version, preview, canBuild, nav, currentP
             <span style={{ flex: 1 }} />
             <ThemeToggle />
             {user.role !== "portal" && <Link href="/" className="ap-top-link">Workspace</Link>}
-            <DropdownMenu menuWidth={200} items={[{ label: `${user.name} · ${user.role}`, isDisabled: true }, { label: "Sign out", icon: <LogOut size={14} />, onClick: () => logoutAction() }]}
+            <DropdownMenu menuWidth={200} items={[{ label: `${user.name} · ${user.role}`, isDisabled: true }, ...(user.role !== "portal" ? [{ label: "Settings", icon: <Settings size={14} />, href: "/workspace/settings" }, { label: "Search  ⌘K", icon: <Search size={14} />, onClick: () => openCommandPalette() }] : []), { label: "Sign out", icon: <LogOut size={14} />, onClick: () => logoutAction() }]}
               renderTrigger={(t) => <button type="button" {...t} className="ap-avatar-btn" aria-label="Account"><Avatar name={user.name} size="sm" /></button>} />
           </header>
           <main className="ap-content" id="main">
@@ -74,6 +75,7 @@ export function AppRuntimeShell({ app, version, preview, canBuild, nav, currentP
         </div>
       </div>
       {open && <div className="ap-scrim" onClick={() => setOpen(false)} aria-hidden />}
+      {user.role !== "portal" && <CommandPalette />}
     </div>
   );
 }
