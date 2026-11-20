@@ -84,3 +84,16 @@ export async function appCommentAction(slug: string, pageId: string, componentId
 export async function createAppFromTemplateAction(key: string) {
   return toResult(async () => { const { createAppFromTemplate } = await import("@/server/apps/templates"); const r = await createAppFromTemplate(await requireContext(), key); done(); return r; });
 }
+
+// ───────── AI full-system planner ─────────
+export async function planSystemAction(description: string, previous?: import("@/server/apps/ai-plan").Plan, change?: string) {
+  return toResult(async () => {
+    const ctx = await requireContext();
+    if (!["owner", "creator"].includes(ctx.platformRole)) throw new Error("Only owners and creators can design systems.");
+    const { planSystem } = await import("@/server/apps/ai-plan");
+    return planSystem(description, previous, change);
+  });
+}
+export async function applyPlanAction(plan: import("@/server/apps/ai-plan").Plan) {
+  return toResult(async () => { const { applyPlan } = await import("@/server/apps/ai-plan"); const r = await applyPlan(await requireContext(), plan); done(); return r; });
+}

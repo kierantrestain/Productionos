@@ -17,7 +17,12 @@ const MODEL = "claude-opus-5-5";
 export const aiConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
 let _client: Anthropic | null = null;
+let _override: Anthropic | null = null;
+/** Test seam: inject a fake client (MOCK-ONLY tests). */
+export function __setAiClient(c: unknown) { _override = c as Anthropic | null; }
+export function aiClient() { return client(); }
 function client() {
+  if (_override) return _override;
   if (!aiConfigured()) throw invalid("AI is not configured. An administrator must set ANTHROPIC_API_KEY in the deployment environment.");
   return (_client ??= new Anthropic());
 }
