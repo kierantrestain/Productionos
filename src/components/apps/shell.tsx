@@ -42,7 +42,7 @@ export function AppRuntimeShell({ app, version, preview, canBuild, nav, currentP
         <aside className={`ap-side ${open ? "open" : ""}`} aria-label="App navigation">
           <div className="ap-brand"><span className="ap-logo" aria-hidden><Grid2x2 size={18} /></span><span>Bang On OS</span><button type="button" className="ap-icon-btn ap-only-mobile" aria-label="Close menu" onClick={() => setOpen(false)}><X size={18} /></button></div>
           <div className="ap-appcard"><span className="ap-appcard-ic" aria-hidden><LayoutDashboard size={16} /></span><span className="ap-strong" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{app.name}</span><span className="ap-badge">{app.audience === "portal" ? "Portal" : version}</span></div>
-          <nav className="ap-nav">{top.map((n) => <Item key={n.id} n={n} depth={0} />)}</nav>
+          <nav className="ap-nav" aria-label="App pages">{top.map((n) => <Item key={n.id} n={n} depth={0} />)}</nav>
           {canBuild && (
             <div className="ap-buildcard">
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}><Sparkles size={18} color="var(--color-accent)" /><strong>Build your own app</strong></div>
