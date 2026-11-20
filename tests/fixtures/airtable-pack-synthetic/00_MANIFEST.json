@@ -1,0 +1,20 @@
+{
+  "exportDateUTC": "2026-01-01T00:00:00+00:00",
+  "source": "SYNTHETIC test fixture — hand-written, fictional, not real data",
+  "bases": [
+    {
+      "baseId": "appSynthetic00001",
+      "baseName": "Synthetic Studio (fictional test fixture)",
+      "tables": 2,
+      "fields": 18,
+      "records": 5,
+      "views": 4,
+      "automationDefinitions": 3,
+      "publishedPages": 2,
+      "formSchemas": 1,
+      "attachmentReferences": 1,
+      "linkEdges": 7,
+      "tableRecordCounts": { "tblSynProjects001": 2, "tblSynTasks000001": 3 }
+    }
+  ]
+}

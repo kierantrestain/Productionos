@@ -27,4 +27,8 @@ private_exports/
 raw_airtable_exports/
 attachments_private/
 *.secret.json
+# Real migration-run reports (may name confidential tables/records) — never commit.
+/private-import/
 .vercel
+
+/.claude/worktrees/

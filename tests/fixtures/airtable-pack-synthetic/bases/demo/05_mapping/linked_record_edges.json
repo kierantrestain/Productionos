@@ -1,0 +1,9 @@
+[
+  { "tableId": "tblSynProjects001", "recordId": "recSynP1", "fieldId": "fldPTasks", "targetTableId": "tblSynTasks000001", "targetRecordId": "recSynT1" },
+  { "tableId": "tblSynProjects001", "recordId": "recSynP1", "fieldId": "fldPTasks", "targetTableId": "tblSynTasks000001", "targetRecordId": "recSynT2" },
+  { "tableId": "tblSynProjects001", "recordId": "recSynP2", "fieldId": "fldPTasks", "targetTableId": "tblSynTasks000001", "targetRecordId": "recSynT3" },
+  { "tableId": "tblSynProjects001", "recordId": "recSynP2", "fieldId": "fldPTasks", "targetTableId": "tblSynTasks000001", "targetRecordId": "recSynGONE" },
+  { "tableId": "tblSynTasks000001", "recordId": "recSynT1", "fieldId": "fldTProject", "targetTableId": "tblSynProjects001", "targetRecordId": "recSynP1" },
+  { "tableId": "tblSynTasks000001", "recordId": "recSynT2", "fieldId": "fldTProject", "targetTableId": "tblSynProjects001", "targetRecordId": "recSynP1" },
+  { "tableId": "tblSynTasks000001", "recordId": "recSynT3", "fieldId": "fldTProject", "targetTableId": "tblSynProjects001", "targetRecordId": "recSynP2" }
+]

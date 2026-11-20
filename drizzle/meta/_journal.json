@@ -85,6 +85,13 @@
       "when": 1795290000000,
       "tag": "0011_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795300000000,
+      "tag": "0013_migration_map",
+      "breakpoints": true
     }
   ]
 }

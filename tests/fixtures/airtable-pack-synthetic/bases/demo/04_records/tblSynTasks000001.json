@@ -1,0 +1,11 @@
+{
+  "sourceBaseId": "appSynthetic00001",
+  "sourceTableId": "tblSynTasks000001",
+  "sourceTableName": "Tasks",
+  "total": 3,
+  "records": [
+    { "id": "recSynT1", "createdTime": "2025-03-02T08:00:00.000Z", "cellValuesByFieldId": { "fldTTitle": "Shoot", "fldTHours": 30, "fldTOwner": "Ava", "fldTProject": [{ "id": "recSynP1", "name": "Pilot" }] } },
+    { "id": "recSynT2", "createdTime": "2025-03-03T08:00:00.000Z", "cellValuesByFieldId": { "fldTTitle": "Edit", "fldTHours": 20, "fldTOwner": "Ben", "fldTProject": [{ "id": "recSynP1", "name": "Pilot" }], "fldTDone": true } },
+    { "id": "recSynT3", "createdTime": "2025-04-03T08:00:00.000Z", "cellValuesByFieldId": { "fldTTitle": "Grade", "fldTHours": 5, "fldTOwner": "Cy", "fldTProject": [{ "id": "recSynP2", "name": "Promo" }] } }
+  ]
+}
