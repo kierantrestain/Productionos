@@ -12,7 +12,7 @@ import { logoutAction, switchOrgAction } from "@/app/actions";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Assistant } from "@/components/hub/assistant";
 
-export function PlatformShell({ user, org, orgs, bases = [], apps = [], children }: { user: { name: string; email: string; role: string }; org: { id: string; name: string; isDemo: boolean }; orgs: { id: string; name: string; isDemo: boolean }[]; bases?: { id: string; name: string; color: string; icon: string }[]; apps?: { id: string; name: string; href: string }[]; children: React.ReactNode }) {
+export function PlatformShell({ user, org, orgs, bases = [], apps = [], suiteUrl, children }: { user: { name: string; email: string; role: string }; org: { id: string; name: string; isDemo: boolean }; orgs: { id: string; name: string; isDemo: boolean }[]; bases?: { id: string; name: string; color: string; icon: string }[]; apps?: { id: string; name: string; href: string }[]; suiteUrl?: string; children: React.ReactNode }) {
   const path = usePathname();
   const attention = useAttentionCount();
   const isAdmin = user.role === "owner";
@@ -42,7 +42,7 @@ export function PlatformShell({ user, org, orgs, bases = [], apps = [], children
               {apps.slice(0, 10).map((a) => <SideNavItem key={a.id} label={a.name} href={a.href} icon={AppWindow} />)}
             </SideNavSection>}
             <SideNavSection title="Workspace">
-              <SideNavItem label="Production Suite" href="/production" icon={Clapperboard} />
+              {suiteUrl && <SideNavItem label="Production Suite" href={suiteUrl} icon={Clapperboard} />}
               <SideNavItem label="Settings" href="/workspace/settings" icon={Settings} isSelected={path.startsWith("/workspace")} />
             </SideNavSection>
           </SideNav>

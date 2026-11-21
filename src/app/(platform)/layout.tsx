@@ -19,7 +19,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
   const [orgs, bases, apps] = await Promise.all([myOrganisations(ctx.userId), ctx.platformRole === "portal" ? [] : listBases(ctx), ctx.platformRole === "portal" ? [] : listApps(ctx)]);
   return (
     <PlatformShell user={{ name: ctx.name, email: ctx.email, role: ctx.platformRole }} org={{ id: ctx.orgId, name: ctx.orgName, isDemo: ctx.orgIsDemo }} orgs={orgs.map((o) => ({ id: o.id, name: o.name, isDemo: o.isDemo }))}
-      bases={bases.map((b) => ({ id: b.id, name: b.name, color: b.color, icon: b.icon }))} apps={apps.filter((a) => a.audience !== "portal" || a.role !== "portal").map((a) => ({ id: a.id, name: a.name, href: a.publishedVersionId ? `/a/${a.slug}` : `/builder/${a.id}` }))}>
+      bases={bases.map((b) => ({ id: b.id, name: b.name, color: b.color, icon: b.icon }))} suiteUrl={process.env.SUITE_URL || undefined} apps={apps.filter((a) => a.audience !== "portal" || a.role !== "portal").map((a) => ({ id: a.id, name: a.name, href: a.publishedVersionId ? `/a/${a.slug}` : `/builder/${a.id}` }))}>
       {children}
     </PlatformShell>
   );

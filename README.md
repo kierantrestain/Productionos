@@ -2,7 +2,7 @@
 
 A no-code OS/app builder: describe or design a business system, get relational data, build screens and
 workflows visually, invite people with the right access, publish, and run it — without editing code.
-The original Production Suite remains as a first-party app; Agency CRM, Production OS and Client Portal
+The Production Suite is now its own app in `kierantrestain/Production-suite`; Agency CRM, Production OS and Client Portal
 are built on the same generic app builder.
 
 > **Status (20 Nov 2026):** deployed on Vercel at **https://production-os-peach.vercel.app** (Neon PostgreSQL,

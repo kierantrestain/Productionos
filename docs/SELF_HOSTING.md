@@ -45,10 +45,10 @@ with tool calling (Qwen 2.5, Llama 3.1+) so the assistant and agents can look up
 `AI_PROVIDER=anthropic` with `ANTHROPIC_API_KEY` uses Claude instead; `AI_PROVIDER=off` disables AI.
 Settings → Integrations & status always shows which AI is active and where data goes.
 
-## Production Suite on its own address
-The Production Suite is part of the same install (same logins, data and permissions). To give it its
-own hostname, point a second DNS name at the server, add it to `deploy/Caddyfile`
-(`{$DOMAIN}, suite.example.com { … }`) and set `SUITE_HOST=suite.example.com` in `.env`.
+## Production Suite
+The Production Suite is a separate app (repo `kierantrestain/Production-suite`) with its own install and
+database. Set `SUITE_URL=https://suite.example.com` in `.env` to show a Production Suite link in the sidebar
+and forward old suite links (`/production`, `/schedule`, …) to it.
 
 ## Day-2 operations
 | Task | Command |

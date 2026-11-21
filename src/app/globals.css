@@ -341,14 +341,3 @@ dialog[open] { position: fixed; }
 .cp-layer { padding: 0; margin: 0; border: 0; background: transparent; max-width: none; max-height: none; width: 100vw; height: 100dvh; overflow: hidden; }
 .cp-layer::backdrop { background: transparent; }
 
-/* Production Suite on the same Astryx shell as the rest of Bang On OS */
-.suite-top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 10px 24px; background: color-mix(in srgb, var(--color-background-body) 90%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--color-border); }
-.suite-search { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 8px; width: min(520px, 100%); height: 36px; padding: 0 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-background-surface); color: var(--color-text-secondary); font-size: 14px; }
-.suite-search:hover { border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border)); } .suite-search:focus-visible { outline: 2px solid var(--color-accent); }
-.suite-search kbd { font: 11px/1 var(--font-family-mono, monospace); padding: 3px 5px; border: 1px solid var(--color-border); border-radius: 4px; }
-.suite-content { padding: 24px 28px 72px; max-width: 1680px; width: 100%; box-sizing: border-box; }
-@media (max-width: 760px) { .suite-content { padding: 16px 14px 72px; } .suite-top { padding: 8px 14px; } .suite-search .label-long { display: none; } }
-/* Suite components adopt the platform's card and control language */
-.suite-root .panel { border-radius: 14px; border-color: var(--color-border); background: var(--color-background-card, var(--color-background-surface)); box-shadow: none; }
-.suite-root .btn { border-radius: 9px; }
-.suite-root .page-head h1 { font-size: 26px; letter-spacing: -0.01em; }
